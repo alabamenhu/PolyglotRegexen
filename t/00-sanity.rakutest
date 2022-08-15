@@ -1,0 +1,124 @@
+use v6.d;
+use Polyglot::Regex::ECMA262::Grammar;
+use Polyglot::Regex::ECMA262::Actions;
+use Test;
+grammar G does ECMA262-Regex { token TOP { <ECMA262-Regex-TOP> } }
+class A does ECMA262-Regex-Actions { method TOP ($/) { make $<ECMA262-Regex-TOP>.made } }
+
+#| Parses as an ECMA regex, turns into an evaluated Raku regex,
+#| and then grabs the Raku code for reconstructing it.  Eventually,
+#| this should use DEPARSE or similar once RakuAST regex nodes are
+#| sufficiently capable.
+sub ecma2raku(Str $ecma --> Str) {
+    #say G.parse($ecma);
+    # The actual result is /{…}regex/, where the block applies a role.
+    # Substring is the simplest way to remove it.  If changes are made to
+    # the block, this number will need to be adjusted.
+    my $s = G.parse($ecma, :actions(A)).made.raku;
+    $s.substr(2,$s.index('/') - 2) ~ '/' ~ $s.substr($s.index('/') + 65);
+}
+
+#`<<<
+subtest 'Unicode' => {
+    is ecma2raku('\p{Letter}'), '/<:Letter>/';
+    is ecma2raku('\P{Letter}'), '/<:!Letter>/';
+    is ecma2raku('\p{Script=Latin}'), '/<:Script<Latin>>/';
+    is ecma2raku('\P{Script=Latin}'), '/<:!Script<Latin>>/';
+    is ecma2raku('[\p{Letter}]'), '/<+:Letter >/';
+    is ecma2raku('[\P{Letter}]'), '/<+:!Letter >/';
+    is ecma2raku('[\p{Script=Latin}]'), '/<+:Script<Latin> >/';
+    is ecma2raku('[\P{Script=Latin}]'), '/<+:!Script<Latin> >/';
+}>>>
+
+subtest 'Modifiers' => {
+    my $*ECMA262-DOT-MATCHES-NEWLINE = True;
+    is ecma2raku('.'), '/./';
+    $*ECMA262-DOT-MATCHES-NEWLINE = False;
+    is ecma2raku('.'), '/<-[\n]>/';
+    my $*ECMA262-MULTILINE-MODE = True;
+    is ecma2raku('^x$'), '/^^x$$/';
+    $*ECMA262-MULTILINE-MODE = False;
+    is ecma2raku('^x$'), '/^x$/';
+    my $*ECMA262-CASE-INSENSITIVE = True;
+    is ecma2raku('a'), ':i/a/';
+    $*ECMA262-CASE-INSENSITIVE = False;
+    is ecma2raku('a'), '/a/';
+}
+
+#`<<<
+subtest 'Literals' => {
+    is ecma2raku('a'), '/a/', 'Single literal, alpha';
+    is ecma2raku('aa'), '/aa/', 'Double literal';
+    is ecma2raku('1'), '/1/', 'Single literal, digit';
+    is ecma2raku(','), '/\,/', 'ECMA literal, Raku escaped';
+    is ecma2raku('a,1'), '/a\,1/', 'ECMA literal sequence, Raku sequence with embedded escaped';
+};
+
+subtest 'Enumerated character classes' => {
+    is ecma2raku('.'), '/<-[\n]>/', 'Wildcard';
+    is ecma2raku('a[]'), '/a/', 'Empty character class'; # null regex not allowed, so test uses single outside token
+    is ecma2raku('[a]'), '/<+[a]>/', 'Single literal character class';
+    is ecma2raku('[^a]'), '/<-[a]>/', 'Single literal negated character class';
+    is ecma2raku('[a-z]'), '/<+[a..z]>/', 'Simple range character class';
+    is ecma2raku('[^a-z]'), '/<-[a..z]>/', 'Simple range negated character class';
+    is ecma2raku('[a-zA-Z]'), '/<+[a..z]+[A..Z]>/', 'Double range character class';
+    is ecma2raku('[^a-zA-Z]'), '/<-[a..z]-[A..Z]>/', 'Double range negated character class';
+    is ecma2raku('[\\d]'), '/<+[0..9]>/', 'Digit class';
+    is ecma2raku('[\\D]'), '/<-[0..9]>/', 'Not-digit class';
+    is ecma2raku('[^\\d]'), '/<-[0..9]>/', 'Negated Digit class';
+    is ecma2raku('[^\\D]'), '/<+[0..9]>/', 'Negated Not-digit class';
+    is ecma2raku('[\\w]'), '/<+[a..zA..Z_-]>/', 'Wordchar class';
+    is ecma2raku('[\\W]'), '/<-[a..zA..Z_-]>/', 'Not-wordchar class';
+    is ecma2raku('[^\\w]'), '/<-[a..zA..Z_-]>/', 'Negated Wordchar class';
+    is ecma2raku('[^\\W]'), '/<+[a..zA..Z_-]>/', 'Negated Not-wordchar class';
+    is ecma2raku('[\\s]'), '/<+[\\x9\\xb\\xc]+:Zs+[\\xFEFF]>/', 'Space class';
+    is ecma2raku('[\\S]'), '/<-[\\x9\\xb\\xc]-:Zs-[\\xFEFF]>/', 'Not-space class';
+    is ecma2raku('[^\\s]'), '/<-[\\x9\\xb\\xc]-:Zs-[\\xFEFF]>/', 'Negated Space class';
+    is ecma2raku('[^\\S]'), '/<+[\\x9\\xb\\xc]+:Zs+[\\xFEFF]>/', 'Negated Not-space class';
+    is ecma2raku('[\\cA-\\cF]'), '/<+[\x1 ..\x6 ]>/', 'Simple range character class via control escapes)';
+    is ecma2raku('[\\x61-\\x7a]'), '/<+[\x61 ..\x7a ]>/', 'Simple range character class via hex escapes)';
+    is ecma2raku('[\\u0061-\\u007a]'), '/<+[\x0061 ..\x007a ]>/', 'Simple range character class via unicode escapes)';
+    is ecma2raku('[!#$%&]'), '/<+[\!]+[\#]+[\$]+[\%]+[\&]>/', 'Multiple enumerated and escaped characters';
+};
+
+
+subtest 'Alternation' => {
+    is ecma2raku('a|b'), '/a||b/', 'Simple alternation, two terms';
+    is ecma2raku('a|b|c'), '/a||b||c/', 'Simple alternation, three terms';
+};
+
+subtest 'Assertions' => {
+    is ecma2raku('a(?=b)'), '/a<?before b>/', 'Simple lookahead';
+    is ecma2raku('a(?!b)'), '/a<!before b>/', 'Simple negative lookahead';
+    is ecma2raku('a(?<=b)'), '/a<?after b>/', 'Simple lookbehind';
+    is ecma2raku('a(?<!b)'), '/a<!after b>/', 'Simple negative lookbehind';
+};
+
+subtest 'Quantifiers' => {
+    is ecma2raku('a?'), '/a?/', 'One or none';
+    is ecma2raku('a+'), '/a+/', 'One or more';
+    is ecma2raku('a*'), '/a*/', 'None or more';
+    is ecma2raku('a{2}'), '/a ** 2 /', 'Exactly some number';
+    is ecma2raku('a{2,}'), '/a ** 2..* /', 'Some number or more';
+    is ecma2raku('a{2,5}'), '/a ** 2..5 /', 'Some number to another number';
+    is ecma2raku('a??'), '/a??/', 'Frugal one or none';
+    is ecma2raku('a+?'), '/a+?/', 'Frugal one or more';
+    is ecma2raku('a*?'), '/a*?/', 'Frugal none or more';
+    is ecma2raku('a{2}?'), '/a **? 2 /', 'Frugal exactly some number';
+    is ecma2raku('a{2,}?'), '/a **? 2..* /', 'Frugal some number or more';
+    is ecma2raku('a{2,5}?'), '/a **? 2..5 /', 'Frugal some number to another number';
+    is ecma2raku('(a)+'), '/(a)[a]*/', 'One or more quantified positional capture';
+
+};
+
+subtest 'Capturing groups' => {
+    is ecma2raku('(a)'), "/(a)/", 'Simple positional';
+    is ecma2raku('(a(b))'), "/(a(b))/", 'Embedded positional';
+    is ecma2raku('(a)(b)'), "/(a)(b)/", 'Sequential positional';
+    is ecma2raku('(a(b))(c)'), "/(a(b))(c)/", 'Complex positional';
+    is ecma2raku('(?<a>a)'), "/\$<a>=(a)/", 'Simple named';
+    is ecma2raku('(?<a>a)(b)'), "/\$<a>=(a)(b)/", 'Simple named with simple positional';
+};
+>>>
+
+done-testing;

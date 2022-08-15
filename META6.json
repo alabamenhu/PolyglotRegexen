@@ -1,0 +1,25 @@
+{
+  "name": "Polyglot::Regexen",
+  "description": "A module enabling different flavors of regex to be used directly in Raku code",
+  "version": "0.0.1",
+  "perl": "6.*",
+  "authors": [
+    "Matthew Stuckwisch"
+  ],
+  "auth": "fez:guifa",
+  "depends": [],
+  "build-depends": [],
+  "test-depends": [
+    "Test"
+  ],
+  "provides": {
+    "Polyglot::Regex::ECMA::Actions": "lib/Polyglot/Regex/ECMA/Actions.rakumod",
+    "Polyglot::Regex::ECMA::Actions-Mixin": "lib/Polyglot/Regex/ECMA/Actions-Mixin.rakumod",
+    "Polyglot::Regex::ECMA::Grammar": "lib/Polyglot/Regex/ECMA/Grammar.rakumod",
+    "Polyglot::Regex::ECMA::Role": "lib/Polyglot/Regex/ECMA/Role.rakumod",
+    "Polyglot::Regexen": "lib/Polyglot/Regexen.rakumod"
+  },
+  "resources": [],
+  "license": "Artistic-2.0",
+  "source-url": "Write me!"
+}

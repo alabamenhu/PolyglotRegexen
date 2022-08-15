@@ -1,0 +1,72 @@
+use v6.d;
+use Polyglot::Regex::ECMA262::Grammar;
+use Polyglot::Regex::ECMA262::Actions;
+use Polyglot::Regex::ECMA262::Role;
+
+use Test;
+
+sub ecma($regex) {
+    grammar G does ECMA262-Regex         { token  TOP      { <ECMA262-Regex-TOP>            } }
+    class   A does ECMA262-Regex-Actions { method TOP ($/) { make $<ECMA262-Regex-TOP>.made } }
+    G.parse($regex, :actions(A)).made
+}
+
+subtest 'Pretty print' => {
+    'a' ~~ ecma '(a)';
+    is $/.gist ~ "\n", q:to/END/;
+        ｢a｣ ᴇᴄᴍᴀ
+         0 => ｢a｣
+         1 => ｢a｣
+        END
+}
+
+subtest 'Match variable functionality' => {
+    'abcd' ~~ ecma '(a)(b)(?<c>c)(?<d>d)';
+    ok  $/ ~~ Match;
+    ok  $/ ~~ ECMA262-Regex-Match;
+    is ~$0,   'abcd';
+    is ~$1,   'a';
+    is ~$2,   'b';
+    is ~$<c>, 'c';
+    is ~$<d>, 'd';
+};
+
+subtest 'Positional matches' => {
+    'abc' ~~ ecma '(a)(b)(c)';
+    ok $/.list ~~ <abc a b c>, 'Sequential';
+
+    'abc' ~~ ecma '(a(b))c';
+    ok $/.list ~~ <abc ab b>, 'Simple embedded';
+
+    'abcde' ~~ ecma 'a(b(c(d(e))))';
+    ok $/.list ~~ <abcde bcde cde de e>, 'Deep right embedded';
+
+    'abcde' ~~ ecma '((((a)b)c)d)e';
+    ok $/.list ~~ <abcde abcd abc ab a>, 'Deep left embedded';
+
+    'abcdefghij' ~~ ecma '((((a)b)(c((d)e)f)g(h))i)j';
+    ok $/.list ~~ <abcdefghij abcdefghi abcdefgh ab a cdef de d h>, 'Complex embedded';
+}
+
+subtest 'Named matches' => {
+    my &hashy = { %($^hash.hash.map: {.key => ~.value}) };
+
+    'abc' ~~ ecma '(?<a>a)(?<b>b)(?<c>c)';
+    ok $/.&hashy ~~ %(<a a b b c c>), 'Sequential';
+
+    'abc' ~~ ecma '(?<a>a(?<b>b))c';
+    ok $/.&hashy ~~ %(<a ab b b>), 'Simple embedded';
+
+    'abcde' ~~ ecma 'a(?<b>b(?<c>c(?<d>d(?<e>e))))';
+    ok $/.&hashy ~~ %(<b bcde c cde d de e e>), 'Deep right embedded';
+
+    'abcde' ~~ ecma '(?<d>(?<c>(?<b>(?<a>a)b)c)d)e';
+    ok $/.&hashy ~~ %(<d abcd c abc b ab a a>), 'Deep left embedded';
+
+    'abcdefghij' ~~ ecma '(?<i>(?<g>(?<b>(?<a>a)b)(?<c>c(?<e>(?<d>d)e)f)g(?<h>h))i)';
+    say $*ERR, $/.&hashy;
+    ok $/.&hashy ~~ %(<a a  b ab  c cdef  d d  e de  g abcdefgh  h h  i abcdefghi>), 'Complex embedded';
+}
+
+
+done-testing
