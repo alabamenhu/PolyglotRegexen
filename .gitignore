@@ -16,3 +16,4 @@ lib/.precomp
 .idea
 *.iml
 .idea/misc.xml
+sdist

@@ -23,7 +23,7 @@ my role FLIP-POLARITY { ; }
 method ECMA262-Regex-TOP (Mu $/) {
     use MONKEY-SEE-NO-EVAL;
 
-    use Polyglot::Regex::ECMA262::Role;
+    use Polyglot::Regex::ECMA262::Role:auth<zef:guifa>;
     make EVAL (
         ~ 'rx'
         ~ ($*ECMA262-CASE-INSENSITIVE ?? ':i' !! '')

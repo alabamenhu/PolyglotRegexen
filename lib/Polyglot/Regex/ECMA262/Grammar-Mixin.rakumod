@@ -1,7 +1,7 @@
 use v6.d;
 
 unit role ECMA262-Regex-Mixin;
-    use Polyglot::Regex::ECMA262::Grammar;
+    use Polyglot::Regex::ECMA262::Grammar:auth<zef:guifa>;
     also does ECMA262-Regex;
 
 #rule statement_control:sym<m:bin> {}

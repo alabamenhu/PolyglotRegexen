@@ -1,7 +1,7 @@
 use v6.d;
-use Polyglot::Regex::ECMA262::Grammar;
-use Polyglot::Regex::ECMA262::Actions;
-use Polyglot::Regex::ECMA262::Role;
+use Polyglot::Regex::ECMA262::Grammar:auth<zef:guifa>;
+use Polyglot::Regex::ECMA262::Actions:auth<zef:guifa>;
+use Polyglot::Regex::ECMA262::Role:auth<zef:guifa>;
 
 use Test;
 

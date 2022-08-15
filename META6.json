@@ -6,17 +6,18 @@
   "authors": [
     "Matthew Stuckwisch"
   ],
-  "auth": "fez:guifa",
+  "auth": "zef:guifa",
   "depends": [],
   "build-depends": [],
   "test-depends": [
     "Test"
   ],
   "provides": {
-    "Polyglot::Regex::ECMA::Actions": "lib/Polyglot/Regex/ECMA/Actions.rakumod",
-    "Polyglot::Regex::ECMA::Actions-Mixin": "lib/Polyglot/Regex/ECMA/Actions-Mixin.rakumod",
-    "Polyglot::Regex::ECMA::Grammar": "lib/Polyglot/Regex/ECMA/Grammar.rakumod",
-    "Polyglot::Regex::ECMA::Role": "lib/Polyglot/Regex/ECMA/Role.rakumod",
+    "Polyglot::Regex::ECMA::Actions": "lib/Polyglot/Regex/ECMA262/Actions.rakumod",
+    "Polyglot::Regex::ECMA::Actions-Mixin": "lib/Polyglot/Regex/ECMA262/Actions-Mixin.rakumod",
+    "Polyglot::Regex::ECMA::Grammar": "lib/Polyglot/Regex/ECMA262/Grammar.rakumod",
+    "Polyglot::Regex::ECMA::Grammar-Mixin": "lib/Polyglot/Regex/ECMA262/Grammar-Mixin.rakumod",
+    "Polyglot::Regex::ECMA::Role": "lib/Polyglot/Regex/ECMA262/Role.rakumod",
     "Polyglot::Regexen": "lib/Polyglot/Regexen.rakumod"
   },
   "resources": [],

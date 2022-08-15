@@ -3,7 +3,7 @@ use v6.d;
 use nqp; use QAST:from<NQP>;
 
 unit role ECMA262-Regex-Actions-Mixin;
-    use Polyglot::Regex::ECMA262::Actions;
+    use Polyglot::Regex::ECMA262::Actions:auth<zef:guifa>;
     also does ECMA262-Regex-Actions;
 
 my sub lk(Mu \match, \key) { match.hash.AT-KEY: key }

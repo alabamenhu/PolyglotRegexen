@@ -1,8 +1,8 @@
 use v6.d;
 
 sub EXPORT(|) {
-    use Polyglot::Regex::ECMA262::Grammar-Mixin;
-    use Polyglot::Regex::ECMA262::Actions-Mixin;
+    use Polyglot::Regex::ECMA262::Grammar-Mixin:auth<zef:guifa>;
+    use Polyglot::Regex::ECMA262::Actions-Mixin:auth<zef:guifa>;
 
     # This mixes in our grammar in the main language.
     # Ideally, we should a slang called 'BASIC' and provide a grammar and action class
