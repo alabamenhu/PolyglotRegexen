@@ -1,25 +1,47 @@
 unit role ECMA262-Regex-Match is export;
 
-#| Finds all matches of a given type ('positional' | 'named')
-#| via a depth-first search in the match.  All matches that aren't
-#| of type ECMA-Regex will have such a role applied.
-my sub find-matches-in($match, :$type) {
-    $match does ECMA262-Regex-Match unless $match ~~ ECMA262-Regex-Match;
-    for $match.Match::chunks -> (:$key, :$value) {
-        next if $key eq '~';
-        my $numeric = so $key ~~ /^<[0..9]>+$/;
-        take $value if $type eq 'positional' && $numeric;
-        take ($key => $value) if $type eq 'named' && !$numeric;
-        find-matches-in $value, :$type
-    }
-}
-has Positional $!positional-cache;
-has Map  $!named-cache;
-method list { .return with $!positional-cache; $!positional-cache := @(eager gather take self and find-matches-in self, :type<positional>) }
-method hash { .return with $!named-cache; $!named-cache = Map.new: eager gather               find-matches-in self, :type<named>      }
+# ECMA allows for three types of matches:
+#   - Non-capture: ignore
+#   - Normal: interpret as positional, indexed from left to right, irrespective of hierarchy
+#   - Named: interpret as positional as normally, but also associate a name to the index.
+# Thus in a regex such as
+#    / a(?:b(c))(?<D>d)(e)/
+# The correct interpretation is
+#    0 abcde
+#    1 c
+#    2 d (and named as 'D')
+#    3 e
+# To avoid trying to overly complicate things, the approach here is the simplest.
+# It may or may not be the most efficient, but it seems to have little overhead.
+# At the start of an ECMA regex, there will be two calls inserted in a code block:
+#    $¢ does ECMA-Regex-Match;
+#    $¢.register-names: :2foo, :5bar;
+# The first applies the role, the second sets the expected positional index for
+# a named capture.  When a key is requested, this index is used as to find the
+# correct match.
+# Note that in ECMA, bad/unknown matches are undefined and in Raku they are Nil.
 
-multi method AT-POS(Int \pos) { say "called [pos = {pos} with list ", self.list.map(*.Str); self.list[pos] }
-multi method AT-KEY(Str \key) { self.hash{key} }
+has @!matches is default(Nil) = self; # 0 = self
+has %!names;
+
+#| Registers the result of a match
+method register-position($match is raw, Int() $position) {
+    @!matches[$position] = $match;
+}
+
+#| Registers the names to be used in a match
+method register-names(*@items) { %!names := Map.new(@items) }
+
+method list { @!matches.List }
+method hash { Map.new(%!names.map: {.key => @!matches[.value]} ) }
+
+multi method AT-POS(Int \pos) {
+    @!matches[pos]
+}
+multi method AT-KEY(Str \key) {
+    return @!matches[$_] with %!names{key};
+    Nil
+}
 
 
 method gist {
@@ -28,15 +50,12 @@ method gist {
     for self.list Z ^self.list -> ($match, $index) {
         @matches.push: %(:$match, key => $index, from => $match.from, to => $match.to),
     }
-    for self.hash.kv -> $key, $match {
-        @matches.push: %(:$match, :$key, from => $match.from, to => $match.to),
-    }
 
-    @matches = @matches.sort: {.<from>, -.<to>};
-
+    @matches = @matches.sort: { .<from>, -.<to> };
+    my %reverse = %!names.invert;
     my $gist = '｢' ~ self.Str ~ '｣ ᴇᴄᴍᴀ';
-    $gist ~= "\n" ~ ' ' ~ .<key> ~ ' => ｢' ~ .<match>.Str ~ '｣'
-        for @matches;
+    $gist ~= "\n" ~ ' ' ~ (.key+1) ~ ('<' ~ $_ ~ '>' with %reverse{.key+1}) ~ ' => ｢' ~ .value.?Str ~ '｣'
+        for @!matches[1..*].pairs;
     $gist
 }
 

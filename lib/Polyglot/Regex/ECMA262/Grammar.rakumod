@@ -21,6 +21,8 @@ token ECMA262-Regex-TOP {
     :my $*ECMA262-CASE-INSENSITIVE;    { $*ECMA262-CASE-INSENSITIVE    = CALLER::CALLERS::<$*ECMA262-CASE-INSENSITIVE>    // False }
     :my $*ECMA262-MULTILINE-MODE;      { $*ECMA262-MULTILINE-MODE      = CALLER::CALLERS::<$*ECMA262-MULTILINE-MODE>      // False }
     :my $*ECMA262-DOT-MATCHES-NEWLINE; { $*ECMA262-DOT-MATCHES-NEWLINE = CALLER::CALLERS::<$*ECMA262-DOT-MATCHES-NEWLINE> // False }
+    :my $*ECMA262-GROUP-COUNTER;       { $*ECMA262-GROUP-COUNTER       = 1}
+    :my %*ECMA262-GROUP-NAMES;
 
     <ECMA262-Regex-disjunction>
     [
@@ -61,6 +63,7 @@ token ECMA262-Regex-alternative { <ECMA262-Regex-term>* }
 
 #| Always succeeds token (needed because of restrictions in NQPRegex)
 token ECMA262-Regex-Succeed { <?> }
+
 #| Always fails token (needed because of restrictions in NQPRegex)
 token ECMA262-Regex-Fail { <!> }
 
@@ -113,7 +116,7 @@ token ECMA262-Regex-assertion:neg-lookahead     { '(?!'  <ECMA262-Regex-disjunct
 token ECMA262-Regex-assertion:pos-lookback      { '(?<=' <ECMA262-Regex-disjunction> ')' }
 token ECMA262-Regex-assertion:neg-lookback      { '(?<!' <ECMA262-Regex-disjunction> ')' }
 
-#| Dictates how many times an aom should be repeated
+#| Dictates how many times an atom should be repeated
 token ECMA262-Regex-quantifier { <ECMA262-Regex-quantifier-prefix> $<frugal>='?'? }
 token ECMA262-Regex-quantifier-prefix {
     | '+' | '*' | '?'
@@ -126,13 +129,18 @@ token ECMA262-Regex-atom:literal          { <-[^$\\.*+?()[\]{}|]> }
 token ECMA262-Regex-atom:any              { \. } # TODO: handle /s flag?
 token ECMA262-Regex-atom:escape           { \\ <ECMA262-Regex-atom-escape> }
 token ECMA262-Regex-atom:char-class       { <ECMA262-Regex-character-class> }
-token ECMA262-Regex-atom:capture-group    { \(   <ECMA262-Regex-group-specifier>? <ECMA262-Regex-disjunction> \) }
+token ECMA262-Regex-atom:capture-group    {
+    \(   <ECMA262-Regex-group-specifier>?
+    :my $*ECMA262-GROUP-COUNT = $*ECMA262-GROUP-COUNTER++;
+    <ECMA262-Regex-disjunction> \)
+}
 token ECMA262-Regex-atom:noncapture-group { \(\?\:                    <ECMA262-Regex-disjunction> \) }
 token ECMA262-Regex-atom:external-regex   { \(\?\.\< <( <.identifier> )> \>\) }
 
 #| An escaped character inside of a regex (e.g. /\s/, /\x42/, or \7)
 proto token ECMA262-Regex-atom-escape { * }
 token ECMA262-Regex-atom-escape:decimal           { <.ECMA262-Regex-decimal-digits>         }
+token ECMA262-Regex-atom-escape:named             { k  <ECMA262-Regex-group-name>           }
 token ECMA262-Regex-atom-escape:char-escape       { <ECMA262-Regex-character-escape>        }
 token ECMA262-Regex-atom-escape:char-class-escape { <.ECMA262-Regex-character-class-escape> }
 
@@ -151,7 +159,8 @@ token ECMA262-Regex-hex-escape-sequence     { 'x' <( <[0..9A..Fa..f]>**2 )> }
 token ECMA262-Regex-unicode-escape-sequence { 'u' <( <[0..9A..Fa..f]>**4 )> }
 token ECMA262-Regex-identity-escape         { <-ident-[\c[ZWJ]\c[ZWNJ]]>    }
 token ECMA262-Regex-unicode-property        { $<type>=<[pP]> \{ <ECMA262-Regex-unicode-property-value-expression> \} }
-## These are the same escapes, except used INSIDE of (enumerated) character classes
+
+# These are the same escapes, except used INSIDE of (enumerated) character classes
 token ECMA262-Regex-character-escape-in-char-class {
     |     <ECMA262-Regex-control-escape-in-char-class>
     | 'c' <ECMA262-Regex-control-letter-in-char-class>
@@ -174,8 +183,10 @@ token ECMA262-Regex-decimal-digits { <[0..9]>+ }
 # we specify valid parts for char class by passing a variable
 token ECMA262-Regex-character-class-escape { <[dDsSwW]> }
 token ECMA262-Regex-character-class {
-    :my $*NEGATED-CHAR-CLASS := False;
-    '[' ['^' {$*NEGATED-CHAR-CLASS := True} ]? <ECMA262-Regex-class-ranges> ']'
+    '['
+        $<negated>='^'?
+        <ECMA262-Regex-class-ranges>
+    ']'
 }
 token ECMA262-Regex-class-ranges {
     <ECMA262-Regex-non-empty-class-ranges>?
