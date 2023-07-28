@@ -1,0 +1,13 @@
+use v6.d;
+use lib 't/ecma';
+use Test;
+use Support;
+
+#is ecma2raku('\p{Letter}'), '/<:Letter>/';
+#is ecma2raku('\P{Letter}'), '/<:!Letter>/';
+#is ecma2raku('\p{Script=Latin}'), '/<:Script<Latin>>/';
+#is ecma2raku('\P{Script=Latin}'), '/<:!Script<Latin>>/';
+#is ecma2raku('[\p{Letter}]'), '/<+:Letter >/';
+#is ecma2raku('[\P{Letter}]'), '/<+:!Letter >/';
+is ecma2raku('[\p{Script=Latin}]'), '/<+:Script<Latin> >/';
+is ecma2raku('[\P{Script=Latin}]'), '/<+:!Script<Latin> >/';

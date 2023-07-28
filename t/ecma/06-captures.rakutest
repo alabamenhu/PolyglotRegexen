@@ -1,0 +1,11 @@
+use v6.d;
+use lib 't/ecma';
+use Test;
+use Support;
+
+is ecma2raku('(a)'), "/(a)/", 'Simple positional';
+is ecma2raku('(a(b))'), "/(a(b))/", 'Embedded positional';
+is ecma2raku('(a)(b)'), "/(a)(b)/", 'Sequential positional';
+is ecma2raku('(a(b))(c)'), "/(a(b))(c)/", 'Complex positional';
+is ecma2raku('(?<a>a)'), "/\$<a>=(a)/", 'Simple named';
+is ecma2raku('(?<a>a)(b)'), "/\$<a>=(a)(b)/", 'Simple named with simple positional';

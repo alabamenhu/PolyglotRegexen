@@ -1,0 +1,12 @@
+use v6.d;
+use lib 't/ecma';
+use Test;
+use Support;
+
+is ecma2raku('a'), '/a/', 'Single literal, alpha';
+is ecma2raku('aa'), '/aa/', 'Double literal';
+is ecma2raku('1'), '/1/', 'Single literal, digit';
+is ecma2raku(','), '/","/', 'ECMA literal, Raku escaped';
+is ecma2raku('a,1'), '/"a,1"/', 'ECMA literal sequence, Raku sequence with embedded escaped';
+
+done-testing;
