@@ -82,43 +82,5 @@ subtest 'Enumerated character classes' => {
 };
 
 
-subtest 'Alternation' => {
-    is ecma2raku('a|b'), '/a||b/', 'Simple alternation, two terms';
-    is ecma2raku('a|b|c'), '/a||b||c/', 'Simple alternation, three terms';
-};
-
-subtest 'Assertions' => {
-    is ecma2raku('a(?=b)'), '/a<?before b>/', 'Simple lookahead';
-    is ecma2raku('a(?!b)'), '/a<!before b>/', 'Simple negative lookahead';
-    is ecma2raku('a(?<=b)'), '/a<?after b>/', 'Simple lookbehind';
-    is ecma2raku('a(?<!b)'), '/a<!after b>/', 'Simple negative lookbehind';
-};
-
-subtest 'Quantifiers' => {
-    is ecma2raku('a?'), '/a?/', 'One or none';
-    is ecma2raku('a+'), '/a+/', 'One or more';
-    is ecma2raku('a*'), '/a*/', 'None or more';
-    is ecma2raku('a{2}'), '/a ** 2 /', 'Exactly some number';
-    is ecma2raku('a{2,}'), '/a ** 2..* /', 'Some number or more';
-    is ecma2raku('a{2,5}'), '/a ** 2..5 /', 'Some number to another number';
-    is ecma2raku('a??'), '/a??/', 'Frugal one or none';
-    is ecma2raku('a+?'), '/a+?/', 'Frugal one or more';
-    is ecma2raku('a*?'), '/a*?/', 'Frugal none or more';
-    is ecma2raku('a{2}?'), '/a **? 2 /', 'Frugal exactly some number';
-    is ecma2raku('a{2,}?'), '/a **? 2..* /', 'Frugal some number or more';
-    is ecma2raku('a{2,5}?'), '/a **? 2..5 /', 'Frugal some number to another number';
-    is ecma2raku('(a)+'), '/(a)[a]*/', 'One or more quantified positional capture';
-
-};
-
-subtest 'Capturing groups' => {
-    is ecma2raku('(a)'), "/(a)/", 'Simple positional';
-    is ecma2raku('(a(b))'), "/(a(b))/", 'Embedded positional';
-    is ecma2raku('(a)(b)'), "/(a)(b)/", 'Sequential positional';
-    is ecma2raku('(a(b))(c)'), "/(a(b))(c)/", 'Complex positional';
-    is ecma2raku('(?<a>a)'), "/\$<a>=(a)/", 'Simple named';
-    is ecma2raku('(?<a>a)(b)'), "/\$<a>=(a)(b)/", 'Simple named with simple positional';
-};
 >>>
-
 done-testing;
