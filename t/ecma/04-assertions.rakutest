@@ -1,0 +1,11 @@
+use v6.d;
+use lib 't/ecma';
+use Test;
+use Support;
+
+is ecma2raku('a(?=b)'), '/a<?before b>/', 'Simple lookahead';
+is ecma2raku('a(?!b)'), '/a<!before b>/', 'Simple negative lookahead';
+is ecma2raku('a(?<=b)'), '/a<?after b>/', 'Simple lookbehind';
+is ecma2raku('a(?<!b)'), '/a<!after b>/', 'Simple negative lookbehind';
+
+done-testing

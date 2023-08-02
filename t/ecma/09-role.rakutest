@@ -2,24 +2,40 @@ use v6.d;
 use Polyglot::Regex::ECMA262::Grammar:auth<zef:guifa>;
 use Polyglot::Regex::ECMA262::Actions:auth<zef:guifa>;
 use Polyglot::Regex::ECMA262::Role:auth<zef:guifa>;
-
 use Test;
 
 sub ecma($regex) {
     grammar G does ECMA262-Regex         { token  TOP      { <ECMA262-Regex-TOP>            } }
     class   A does ECMA262-Regex-Actions { method TOP ($/) { make $<ECMA262-Regex-TOP>.made } }
-    G.parse($regex, :actions(A)).made
+    use MONKEY-SEE-NO-EVAL;
+    use experimental :rakuast;
+
+    EVAL RakuAST::QuotedRegex.new(body => G.parse($regex, :actions(A)).made);
 }
 
 subtest 'Pretty print' => {
     'a' ~~ ecma '(a)';
     is $/.gist ~ "\n", q:to/END/;
         ｢a｣ ᴇᴄᴍᴀ
-         0 => ｢a｣
          1 => ｢a｣
         END
-}
 
+    'a' ~~ ecma '(?<A>a)';
+    is $/.gist ~ "\n", q:to/END/;
+        ｢a｣ ᴇᴄᴍᴀ
+         1<A> => ｢a｣
+        END
+
+    'abcdefg' ~~ ecma '(?<A>a(b(c)))(?<D>d(?:e))(?:f)(g)';
+    is $/.gist ~ "\n", q:to/END/;
+        ｢abcdefg｣ ᴇᴄᴍᴀ
+         1<A> => ｢abc｣
+         2 => ｢bc｣
+         3 => ｢c｣
+         4<D> => ｢de｣
+         5 => ｢g｣
+        END
+}
 subtest 'Match variable functionality' => {
     'abcd' ~~ ecma '(a)(b)(?<c>c)(?<d>d)';
     ok  $/ ~~ Match;
@@ -30,7 +46,6 @@ subtest 'Match variable functionality' => {
     is ~$<c>, 'c';
     is ~$<d>, 'd';
 };
-
 subtest 'Positional matches' => {
     'abc' ~~ ecma '(a)(b)(c)';
     ok $/.list ~~ <abc a b c>, 'Sequential';
@@ -68,5 +83,46 @@ subtest 'Named matches' => {
     ok $/.&hashy ~~ %(<a a  b ab  c cdef  d d  e de  g abcdefgh  h h  i abcdefghi>), 'Complex embedded';
 }
 
+subtest 'Positional match backreferences' => {
+    'aa' ~~ ecma '(a)\1';
+    ok $/.list ~~ <aa a>, 'Sequential';
+
+    'abb' ~~ ecma '(a(b))\2';
+    ok $/.list ~~ <abb ab b>, 'Simple embedded';
+
+    'abcdee' ~~ ecma 'a(b(c(d(e))))\4';
+    ok $/.list ~~ <abcdee bcde cde de e>, 'Deep right embedded';
+
+    'abcdea' ~~ ecma '((((a)b)c)d)e\4';
+    ok $/.list ~~ <abcdea abcd abc ab a>, 'Deep left embedded';
+    'abcdefghijh' ~~ ecma '((((a)b)(c((d)e)f)g(h))i)j\8';
+    ok $/.list ~~ <abcdefghijh abcdefghi abcdefgh ab a cdef de d h>, 'Complex embedded';
+
+    'aabb' ~~ ecma '(a)\1(b)\2';
+    ok $/.list ~~ <aabb a b>, 'Multi sequential';
+}
+
+subtest 'Named match backreferences' => {
+
+    my &hashy = { %($^hash.hash.map: {.key => ~.value}) };
+
+    'aa' ~~ ecma '(?<a>a)\k<a>';
+    ok $/.&hashy ~~ %(<a a>), 'Sequential';
+
+    'abb' ~~ ecma '(?<a>a(?<b>b))\k<b>';
+    ok $/.&hashy ~~ %(<a ab b b>), 'Simple embedded';
+
+    'abcdee' ~~ ecma 'a(?<b>b(?<c>c(?<d>d(?<e>e))))\k<e>';
+    ok $/.&hashy ~~ %(<b bcde c cde d de e e>), 'Deep right embedded';
+
+    'abcdea' ~~ ecma '(?<d>(?<c>(?<b>(?<a>a)b)c)d)e\k<a>';
+    ok $/.&hashy ~~ %(<d abcd c abc b ab a a>), 'Deep left embedded';
+
+    'abcdefghijh' ~~ ecma '(?<i>(?<g>(?<b>(?<a>a)b)(?<c>c(?<e>(?<d>d)e)f)g(?<h>h))i)j\k<h>';
+    ok $/.&hashy ~~ %(<a a  b ab  c cdef  d d  e de  g abcdefgh  h h  i abcdefghi>), 'Complex embedded';
+
+    'aabb' ~~ ecma '(?<a>a)\k<a>(?<b>b)\k<b>';
+    ok $/.&hashy ~~ %(<a a b b>), 'Multi sequential';
+}
 
 done-testing

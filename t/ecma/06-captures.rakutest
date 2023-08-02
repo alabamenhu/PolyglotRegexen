@@ -1,0 +1,28 @@
+use v6.d;
+use lib 't/ecma';
+use Test;
+use Support;
+use experimental :rakuast;
+
+# Todo: These should not need grouping unless quantified.
+is ecma2raku('(a)'),
+    '/[$<1>=[a]{ $¢.register-position($/.AT-POS(1, :ECMA262-INTERNAL), 1) }]/',
+    'Simple positional';
+is ecma2raku('(a(b))'),
+    '/[$<1>=[a[$<2>=[b]{ $¢.register-position($/.AT-POS(2, :ECMA262-INTERNAL), 2) }]]{ $¢.register-position($/.AT-POS(1, :ECMA262-INTERNAL), 1) }]/',
+    'Embedded positional';
+is ecma2raku('(a)(b)'),
+    '/[$<1>=[a]{ $¢.register-position($/.AT-POS(1, :ECMA262-INTERNAL), 1) }][$<2>=[b]{ $¢.register-position($/.AT-POS(2, :ECMA262-INTERNAL), 2) }]/',
+    'Sequential positional';
+is ecma2raku('(a(b))(c)'),
+    '/[$<1>=[a[$<2>=[b]{ $¢.register-position($/.AT-POS(2, :ECMA262-INTERNAL), 2) }]]{ $¢.register-position($/.AT-POS(1, :ECMA262-INTERNAL), 1) }][$<3>=[c]{ $¢.register-position($/.AT-POS(3, :ECMA262-INTERNAL), 3) }]/',
+    'Complex positional';
+is ecma2raku('(?<a>a)'),
+    '/[$<1>=[a]{ $¢.register-position($/.AT-POS(1, :ECMA262-INTERNAL), 1) }]/',
+    'Simple named';
+is ecma2raku('(?<a>a)(b)'),
+    '/[$<1>=[a]{ $¢.register-position($/.AT-POS(1, :ECMA262-INTERNAL), 1) }][$<2>=[b]{ $¢.register-position($/.AT-POS(2, :ECMA262-INTERNAL), 2) }]/',
+    'Simple named with simple positional';
+
+
+done-testing;

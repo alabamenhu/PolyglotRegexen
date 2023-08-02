@@ -1,0 +1,19 @@
+use v6.d;
+use lib 't/ecma';
+use Test;
+use Support;
+
+my $*ECMA262-DOT-MATCHES-NEWLINE = True;
+is ecma2raku('.'), '/./';
+$*ECMA262-DOT-MATCHES-NEWLINE = False;
+is ecma2raku('.'), '/<-[\n]>/';
+my $*ECMA262-MULTILINE-MODE = True;
+is ecma2raku('^x$'), '/^^ x$$ /';
+$*ECMA262-MULTILINE-MODE = False;
+is ecma2raku('^x$'), '/^ x$ /';
+#my $*ECMA262-CASE-INSENSITIVE = True;
+#is ecma2raku('a'), ':i/a/';
+#$*ECMA262-CASE-INSENSITIVE = False;
+#is ecma2raku('a'), '/a/';
+
+done-testing

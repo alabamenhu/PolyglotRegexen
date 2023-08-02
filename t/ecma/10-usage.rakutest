@@ -1,0 +1,57 @@
+use Polyglot::Regexen;
+use Test;
+
+subtest 'Quoted forms', {
+    my \A = rx:ecma/a+/;
+    is ('aAbBcC' ~~ A).Str, 'a', 'No modifiers in bare quoted form';
+    my \B = rx:ecma/b+/i;
+    is ('aAbBcC' ~~ B).Str, 'bB', 'Postquote case-insensitive bare quoted form';
+    my \C = rx:ecma:i/c+/;
+    is ('aAbBcC' ~~ C).Str, 'cC', 'Prequote case-insensitive bare quoted form';
+    #`<<<
+    given 'dDeEfF' {
+        my $d = m:ecma/d+/;
+        is $d.Str, 'd', 'No modifiers in topical quoted form';
+        my $e = m:ecma/e+/i;
+        is $e.Str, 'eE', 'Postquote case-insensitive topical quoted form';
+        my $f = m:ecma:i/f+/;
+        is $f.Str, 'fF', 'Prequote case-insensitive topical quoted form';
+    }
+    >>>
+}
+
+subtest 'Grammar-scoped forms', {
+    grammar A { regex:ecma TOP {a+} }
+    ok (A.parse: "aaaa"), 'Base regex in grammar';
+
+    grammar B { regex:ecma:i TOP {b+} }
+    ok (B.parse: "bBbB"), 'Regex with case-insensitive modifier in grammar';
+
+    grammar Ω {
+        regex:ecma TOP {(?:[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*|"(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21\x23-\x5b\x5d-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])*")@(?:(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?|\[(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?|[a-z0-9-]*[a-z0-9]:(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21-\x5a\x53-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])+)\])}
+    }
+    ok (Ω.parse: "foo@bar.com"), 'Yes, that’s really an e-mail regex';
+}
+
+subtest 'Lexically-scoped forms', {
+    my regex:ecma S {s+}
+    ok ('ssss' ~~ &S), 'My scoped regex';
+
+    class T {
+        my regex:ecma U {u+}
+        ok ('uuuu' ~~ &U), 'My-scoped regex in package';
+        our regex:ecma V {v+}
+        ok ('vvvv' ~~ &V), 'Our-scoped regex in own package';
+    }
+    nok '&U' (elem) ::.keys, 'My-scoped regex in package not visible from outside';
+    nok '&V' (elem) ::.keys, 'Our-scoped regex in package not immediately visible from outside';
+    nok '&U' (elem) T::.keys, 'My-scoped regex in package not visible from outside with package name';
+    ok  '&V' (elem) T::.keys, 'Our-scoped regex in package visible visible from outside with package name';
+    # These two seem totally backwards.  The U test succeeds, but it should fail.
+    # The V test fails, but it should succeed
+    # ok ('uuuu' ~~ T::<&U>), 'Our-scoped regex in package visible from outside with package name ';
+    # These two seem totally backwards
+    # ok ('vvvv' ~~ T::<&V>), 'Our-scoped regex in package visible from outside with package name ';
+}
+
+done-testing;

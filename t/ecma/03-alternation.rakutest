@@ -1,0 +1,9 @@
+use v6.d;
+use lib 't/ecma';
+use Test;
+use Support;
+
+is ecma2raku('a|b'), '/a|| b/', 'Simple alternation, two terms';
+is ecma2raku('a|b|c'), '/a|| b|| c/', 'Simple alternation, three terms';
+
+done-testing

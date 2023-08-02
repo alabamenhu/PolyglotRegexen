@@ -1,0 +1,79 @@
+use v6.d;
+use lib 't/ecma';
+use Test;
+use Support;
+
+#`<<<
+# ATOMIC (see below for enumerated)
+is ecma2raku('.'), '/<-[\n]>/', 'Wildcard';
+is ecma2raku('\d'), '/<+[0..9]>/', 'Atomic digits';
+is ecma2raku('\D'), '/<-[0..9]>/', 'Atomic negated digits';
+is ecma2raku('\w'), '/<+[a..z A..Z _]>/', 'Atomic word character';
+is ecma2raku('\W'), '/<-[a..z A..Z _]>/', 'Atomic negated word character';
+
+# This documentation should probably go elsewhere but putting it here for now.
+# [ab] Regex-character-class
+# [ab]   ↳ negated
+# [ab]   ↳ Regex-class-ranges
+#  ab      ↳ Regex-non-empty-class-ranges
+#  a         ↳ Regex-class-atom-no-dash
+#  a           ↳ single
+#   b        ↳ Regex-non-empty-class-ranges-no-dash
+#   b          ↳ Regex-class-atom
+#   b            ↳ Regex-class-atom-no-dash
+#   b              ↳ single
+
+is ecma2raku('a[]'), '/a/', 'Empty character class'; # null regex not allowed, so test uses single outside token
+is ecma2raku('[a]'), '/<+[a]>/', 'Single literal character class';
+is ecma2raku('[ab]'), '/<+[a b]>/', 'Double literal character class';
+is ecma2raku('[^a]'), '/<-[a]>/', 'Single literal negated character class';
+is ecma2raku('[^ab]'), '/<-[a b]>/', 'Double literal negated character class';
+
+# Ranges get parsed like this:
+# [a-z]     character-class => ｢[a-z]｣
+#           ↳ negated => ｢｣
+# [a-z]     ↳ class-ranges => ｢a-z｣
+# [a-z]       ↳ non-empty-class-ranges => ｢a-z｣
+#  a            ↳ class-atom => ｢a｣
+#  a              ↳ class-atom-no-dash => ｢a｣
+#  a                ↳ single => ｢a｣
+#    z          ↳ class-atom => ｢z｣
+#    z            ↳ class-atom-no-dash => ｢z｣
+#    z              ↳ single => ｢z｣
+#               ↳ class-ranges => ｢｣
+>>>
+
+
+is ecma2raku('[-]'), '/<+[-]>/', 'Hyphen as sole character';
+is ecma2raku('[-a]'), '/<+[- a]>/', 'Hyphen as first character';
+is ecma2raku('[a-]'), '/<+[a -]>/', 'Hyphen as final character';
+is ecma2raku('[aB-Z]'), '/<+[a B..Z]>/', 'Range after literal';
+is ecma2raku('[a-yZ]'), '/<+[a..y Z]>/', 'Range before literal';
+is ecma2raku('[a-mN-Z]'), '/<+[a..m N..Z]>/', 'Sequential range';
+
+
+#`<<<
+is ecma2raku('[a-z]'), '/<+[a..z]>/', 'Simple range character class';
+is ecma2raku('[^a-z]'), '/<-[a..z]>/', 'Simple range negated character class';
+is ecma2raku('[a-zA-Z]'), '/<+[a..z A..Z]>/', 'Double range character class';
+is ecma2raku('[^a-zA-Z]'), '/<-[a..z A..Z]>/', 'Double range negated character class';
+is ecma2raku('[\\d]'), '/<+[0..9]>/', 'Digit class';
+is ecma2raku('[\\D]'), '/<-[0..9]>/', 'Not-digit class';
+is ecma2raku('[^\\d]'), '/<-[0..9]>/', 'Negated Digit class';
+is ecma2raku('[^\\D]'), '/<+[0..9]>/', 'Negated Not-digit class';
+is ecma2raku('[\\w]'), '/<+[a..z A..Z _]>/', 'Wordchar class';
+is ecma2raku('[\\W]'), '/<-[a..z A..Z _]>/', 'Not-wordchar class';
+is ecma2raku('[^\\w]'), '/<-[a..z A..Z _]>/', 'Negated Wordchar class';
+is ecma2raku('[^\\W]'), '/<+[a..z A..Z _]>/', 'Negated Not-wordchar class';
+#is ecma2raku('[\\s]'), "/<+[\x9\xb\xc\xfeff\x20\xa0\x1680\x2000..\x200a\x202f\x205f\x3000]>/", 'Space class';
+#is ecma2raku('[\\S]'), '/<-[\\x9\\xb\\xc]-:Zs-[\\xFEFF]>/', 'Not-space class';
+#is ecma2raku('[^\\s]'), '/<-[\\x9\\xb\\xc]-:Zs-[\\xFEFF]>/', 'Negated Space class';
+#is ecma2raku('[^\\S]'), '/<+[\\x9\\xb\\xc]+:Zs+[\\xFEFF]>/', 'Negated Not-space class';
+is ecma2raku('[\\da]'), '/<+[0..9 a]>/', 'Digit class with a literal';
+is ecma2raku('[\\Da]'), '/<+[a] -[0..9]>/', 'Negated digit class with a non-negated literal';
+is ecma2raku('[\\cA-\\cF]'), "/<+[\x1..\x6]>/", 'Simple range character class via control escapes)';
+is ecma2raku('[\\x61-\\x7a]'), '/<+[a..z]>/', 'Simple range character class via hex escapes)';
+is ecma2raku('[\\u0061-\\u007a]'), '/<+[a..z]>/', 'Simple range character class via unicode escapes)';
+is ecma2raku('[!#$%&]'), '/<+[! # $ % &]>/', 'Multiple enumerated and escaped characters';
+>>>
+done-testing;
