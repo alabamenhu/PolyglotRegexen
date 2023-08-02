@@ -3,11 +3,23 @@ use lib 't/ecma';
 use Test;
 use Support;
 
-#is ecma2raku('\p{Letter}'), '/<:Letter>/';
-#is ecma2raku('\P{Letter}'), '/<:!Letter>/';
-#is ecma2raku('\p{Script=Latin}'), '/<:Script<Latin>>/';
-#is ecma2raku('\P{Script=Latin}'), '/<:!Script<Latin>>/';
-#is ecma2raku('[\p{Letter}]'), '/<+:Letter >/';
-#is ecma2raku('[\P{Letter}]'), '/<+:!Letter >/';
-is ecma2raku('[\p{Script=Latin}]'), '/<+:Script<Latin> >/';
-is ecma2raku('[\P{Script=Latin}]'), '/<+:!Script<Latin> >/';
+# Needs more detailed checks for abbreviations and short forms, etc.
+# Use the following pages as references
+# (1) https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Regular_expressions/Unicode_character_class_escape
+# (2) https://unicode.org/Public/UCD/latest/ucd/PropertyValueAliases.txt
+# (3) https://tc39.es/ecma262/multipage/text-processing.html#table-nonbinary-unicode-properties
+
+# do additional testing for character classes with other values around them
+is ecma2raku('\p{Letter}'), '/<+:Letter>/';
+is ecma2raku('\P{Letter}'), '/<+:!Letter>/';
+is ecma2raku('\p{Script=Latin}'), '/<+:Script("Latin")>/';
+is ecma2raku('\P{Script=Latin}'), '/<+:!Script("Latin")>/';
+is ecma2raku('[\p{Letter}]'), '/<+:Letter>/';
+is ecma2raku('[\P{Letter}]'), '/<+:!Letter>/';
+is ecma2raku('[^\p{Letter}]'), '/<-:Letter>/';
+is ecma2raku('[^\P{Letter}]'), '/<-:!Letter>/';
+is ecma2raku('[\p{Script=Latin}]'), '/<+:Script("Latin")>/';
+is ecma2raku('[\P{Script=Latin}]'), '/<+:!Script("Latin")>/';
+is ecma2raku('[^\p{Script=Latin}]'), '/<-:Script("Latin")>/';
+is ecma2raku('[^\P{Script=Latin}]'), '/<-:!Script("Latin")>/';
+done-testing
