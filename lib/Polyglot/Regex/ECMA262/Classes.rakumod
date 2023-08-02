@@ -4,7 +4,7 @@ use experimental :rakuast;
 
 sub rx-block-blockoid-stmtlist (+@list) {
     RakuAST::Regex::Block.new(RakuAST::Block.new(
-        body => RakuAST::Blockoid.new(RakuAST::StatementList.new: @list)
+        body => RakuAST::Blockoid.new(RakuAST::StatementList.new: |@list)
     ))
 }
 
@@ -54,7 +54,7 @@ class Quantifier is export {
     has $.frugal = False;
     method GENERATE {
         my $backtrack := $!frugal
-            ?? RakuAST::Regex::Backtrack::Frugal.new
+            ?? RakuAST::Regex::Backtrack::Frugal
             !! Empty;
         $!min == 0
             ?? $!max == Inf
@@ -104,10 +104,10 @@ class Wildcard is export {
 }
 
 class Group is export {
-    has @!items;
+    has @.items;
     method new(+@items) { self.bless: :@items }
     method GENERATE {
-        RakuAST::Regex::Group.new(@!items)
+        RakuAST::Regex::Group.new(|@!items.map(*.GENERATE))
     }
 }
 
@@ -130,68 +130,64 @@ class CaptureGroup is export {
         # a non-capturing version of its contents quantified one less
         # time. If quantifying as ?, simply insert into a basic group
         # for most simplicity.
-        RakuAST::Regex::NamedCapture.new(
+        my @stmts;
+        @stmts.push: RakuAST::Regex::NamedCapture.new(
             name  => $!pos.Str,
-            regex => RakuAST::Regex::Group.new(@!items)
-        ),
-        rx-block-blockoid-stmtlist(
+            regex => RakuAST::Regex::Group.new(|@!items.map(*.GENERATE))
+        );
+        @stmts.push: rx-block-blockoid-stmtlist(
             RakuAST::Statement::Expression.new(
                 expression => RakuAST::ApplyPostfix.new(
                     operand => RakuAST::Var::Lexical.new('$¢'),
                     postfix => RakuAST::Call::Method.new(
                         name => RakuAST::Name.from-identifier('register-position'),
-                        args => RakuAST::ArgList.new([
+                        args => RakuAST::ArgList.new(
                             RakuAST::ApplyPostfix.new(
                                 operand => RakuAST::Var::Lexical.new('$/'),
                                 postfix => RakuAST::Call::Method.new(
-                                    name => RakuAST::Name.from-identifier-parts(<Match AT-POS>),
-                                    args => RakuAST::ArgList.new([RakuAST::IntLiteral.new: $*ECMA262-GROUP-COUNT])
+                                    # name => RakuAST::Name.from-identifier-parts('Match', 'AT-POS'), <-- should be
+                                    name => RakuAST::Name.from-identifier('AT-POS'), # <-- should be
+                                    args => RakuAST::ArgList.new(
+                                        RakuAST::IntLiteral.new($!pos),
+                                        RakuAST::ColonPair::True.new("ECMA262-INTERNAL") # <-- shouldn't be necessary
+                                    )
                                 )
                             ),
-                            RakuAST::IntLiteral.new($*ECMA262-GROUP-COUNT)
-                        ])
-                    )
-                )
-            )
-        )
-    }
-}
-
-class BackreferencePositional is export {
-    has $.position;
-    method new($position) { self.bless: :$position}
-    method GENERATE {
-        # This is tricky here.  It doesn't seem like RakuAST yet supports the
-        # `$(...)` syntax for doing a literal return of a code block.
-        # So instead, we'll use <{ (...).raku }> which should interpolate
-        # correctly as a literal string.  What we want is
-        #     [$($/.AT-POS: 2)]
-        # So we generate
-        #     <{ $/.AT-POS(2).Str.raku }>
-        RakuAST::Regex::Assertion::InterpolatedBlock.new(
-            block => RakuAST::Block.new(
-                body => RakuAST::Blockoid.new(
-                    RakuAST::StatementList.new(
-                        RakuAST::Statement::Expression.new(
-                            expression => RakuAST::ApplyPostfixi.new(
-                                operand => RakuAST::ApplyPostfix.new(
-                                    operand => RakuAST::ApplyPostfix.new(
-                                        operand => RakuAST::Var::Lexical.new('$¢'),
-                                        postfix => RakuAST::Call::Method.new(
-                                            name => RakuAST::Name.from-identifier('AT-POS'),
-                                            args => RakuAST::ArgList.new([RakuAST::IntLiteral.new: $!position])
-                                        ),
-                                    ),
-                                    postfix => RakuAST::Call::Method.new(
-                                        name => RakuAST::Name.from-identifier('Str')
-                                    )
-                                ),
-                                postfix => RakuAST::Name.from-identifier('raku')
-                            )
+                            RakuAST::IntLiteral.new($!pos)
                         )
                     )
                 )
             )
+        );
+
+        RakuAST::Regex::Group.new( RakuAST::Regex::Sequence.new: |@stmts )
+    }
+}
+
+# TODO: JavaScript does not support forward references, but does not treat them as an error.
+# In JavaScript, forward references always find a zero-length match, just as backreferences
+# to non-participating groups do in JavaScript. Because this is not particularly useful,
+# XRegExp makes them an error. In std::regex, Boost, Python, Tcl, and VBScript forward
+# references are an error.
+class BackreferencePositional is export {
+    has $.position;
+    method new($position) { self.bless: :$position}
+    method GENERATE {
+        RakuAST::Regex::Interpolation.new(
+            sequential => False,
+            var => RakuAST::Contextualizer::Item.new( # RakuAST::StatementSequence.new(
+                RakuAST::Statement::Expression.new(
+                    expression => RakuAST::ApplyPostfix.new(
+                        operand => RakuAST::Var::Lexical.new('$¢'),
+                        postfix => RakuAST::Call::Method.new(
+                            name => RakuAST::Name.from-identifier('AT-POS'),
+                            args => RakuAST::ArgList.new(
+                                RakuAST::IntLiteral.new: $!position.Int
+                            )
+                        )
+                    )
+                )
+            ) # )
         )
     }
 }
@@ -200,49 +196,32 @@ class BackreferenceNamed is export {
     has $.name;
     method new($name) { self.bless: :$name}
     method GENERATE {
-        # This is tricky here.  It doesn't seem like RakuAST yet supports the
-        # `$(...)` syntax for doing a literal return of a code block.
-        # So instead, we'll use <{ (...).raku }> which should interpolate
-        # correctly as a literal string.  What we want is
-        #     [$($/.AT-KEY: 'foo')]
-        # So we generate
-        #     <{ $/.AT-KEY('foo').Str.raku }>
-        RakuAST::Regex::Assertion::InterpolatedBlock.new(
-            block => RakuAST::Block.new(
-                body => RakuAST::Blockoid.new(
-                    RakuAST::StatementList.new(
-                        RakuAST::Statement::Expression.new(
-                            expression => RakuAST::ApplyPostfixi.new(
-                                operand => RakuAST::ApplyPostfix.new(
-                                    operand => RakuAST::ApplyPostfix.new(
-                                        operand => RakuAST::Var::Lexical.new('$¢'),
-                                        postfix => RakuAST::Call::Method.new(
-                                            name => RakuAST::Name.from-identifier('AT-KEY'),
-                                            args => RakuAST::ArgList.new([RakuAST::StrLiteral.new: $!name])
-                                        ),
-                                    ),
-                                    postfix => RakuAST::Call::Method.new(
-                                        name => RakuAST::Name.from-identifier('Str')
-                                    )
-                                ),
-                                postfix => RakuAST::Name.from-identifier('raku')
+        RakuAST::Regex::Interpolation.new(
+            sequential => False,
+            var => RakuAST::Contextualizer::Item.new( # RakuAST::StatementSequence.new(
+                RakuAST::Statement::Expression.new(
+                    expression => RakuAST::ApplyPostfix.new(
+                        operand => RakuAST::Var::Lexical.new('$¢'),
+                        postfix => RakuAST::Call::Method.new(
+                            name => RakuAST::Name.from-identifier('AT-KEY'),
+                            args => RakuAST::ArgList.new(
+                                RakuAST::StrLiteral.new: $!name
                             )
                         )
                     )
                 )
-            )
+            ) # )
         )
     }
 }
 
-constant ECMA262-WordChar = RakuAST::Regex::Assertion::CharClass.new(
-    RakuAST::Regex::CharClassElement::Enumeration.new(
-        elements => [
-            RakuAST::Regex::CharClassEnumerationElement::Character.new("_"),
+my \elements = RakuAST::Regex::CharClassEnumerationElement::Character.new("_"),
             RakuAST::Regex::CharClassEnumerationElement::Range.new(:from("a".ord),:to("z".ord)),
             RakuAST::Regex::CharClassEnumerationElement::Range.new(:from("A".ord),:to("Z".ord)),
-            RakuAST::Regex::CharClassEnumerationElement::Range.new(:from("0".ord),:to("9".ord)),
-        ]
+            RakuAST::Regex::CharClassEnumerationElement::Range.new(:from("0".ord),:to("9".ord));
+constant ECMA262-WordChar = RakuAST::Regex::Assertion::CharClass.new(
+    RakuAST::Regex::CharClassElement::Enumeration.new(
+        elements => elements
     )
 );
 constant ECMA262-WordCharNeg = RakuAST::Regex::Assertion::CharClass.new(
@@ -330,11 +309,11 @@ class Lookahead is export {
             assertion => RakuAST::Regex::Assertion::Named::RegexArg.new(
                 name => RakuAST::Name.from-identifier('before'),
                 regex-arg => (@!items == 1
-                    ?? @!items.head
-                    !! RakuAST::Regex::Sequence.new(@!items)
+                    ?? @!items.head.GENERATE
+                    !! RakuAST::Regex::Sequence.new(@!items.map: *.GENERATE)
                 ),
-               :$!negated
-            )
+            ),
+            :$!negated
         )
     }
 }
@@ -348,21 +327,26 @@ class Lookback is export {
             assertion => RakuAST::Regex::Assertion::Named::RegexArg.new(
                 name => RakuAST::Name.from-identifier('after'),
                 regex-arg => (@!items == 1
-                    ?? @!items.head
-                    !! RakuAST::Regex::Sequence.new(@!items)
+                    ?? @!items.head.GENERATE
+                    !! RakuAST::Regex::Sequence.new(@!items.map: *.GENERATE)
                 ),
-                :$!negated
-            )
+            ),
+            :$!negated
         )
     }
 }
 
 class CharacterClassEscape {...}
+class CharacterClassUnicodeProperty {...}
+
 class CharacterClass is export {
     has $.negated;
     has @.items;
     method new (+@items, :$negated = False) { self.bless: :@items, :$negated }
     method GENERATE {
+        # ECMA262 allows an empty character class.  Raku doesn't, but it's basically an ignorable
+        return Empty unless @!items;
+
         # The dynamic variable here is needed to let the character classes such as
         # \s or \S know whether they should be reversed.  THis is because we can't use
         # them directly, and while I can use [^a\S] (not a and not NOT a space) in JavaScript
@@ -370,28 +354,37 @@ class CharacterClass is export {
         my $*NEGATED = $!negated;
         my @flip; # these need inversion
         my @base; # these don't
+        my @flip-u; # these need inversion
+        my @base-u; # these don't
 
         for @!items -> $item {
             if ($item ~~ CharacterClassEscape) && $item.negated {
                 @flip.push: $item
             } else {
-                @base.push: $item
+                $item ~~ CharacterClassUnicodeProperty
+                    ?? @base-u.push($item)
+                    !! @base.push($item)
             }
         }
 
+        # A given generator may produce multiple values, so we need to flatten before passing
         my $base := @base
             ?? RakuAST::Regex::CharClassElement::Enumeration.new(
-                elements => @base.map(*.GENERATE),
-                :$!negated
+                :$!negated,
+                :elements(@base.map(*.GENERATE).flat.Array)
             )
             !! Empty;
         my $flip := @flip
             ?? RakuAST::Regex::CharClassElement::Enumeration.new(
-                elements => @flip.map(*.GENERATE),
+                :elements(@flip.map(*.GENERATE).flat.Array),
                 negated => !$!negated
             )
             !! Empty;
-        RakuAST::Regex::Assertion::CharClass.new([$base, $flip])
+        my $base-u := @base-u
+            ?? @base-u.map(*.GENERATE)
+            !! Empty;
+
+        RakuAST::Regex::Assertion::CharClass.new(|$base, |$flip, |$base-u)
     }
 }
 
@@ -406,10 +399,14 @@ class CharacterClassSingle is export {
 class CharacterClassRange is export {
     has $.start;
     has $.end;
-    method new($start, $end) { self.bless: :$start, :$end }
+    proto method new(|) {*}
+    multi method new(CharacterClassSingle $start, CharacterClassSingle $end) { samewith $start.char, $end.char }
+    multi method new(Str $start, Str $end) { samewith $start.ord, $end.ord }
+    multi method new(Int $start, Int $end) { self.bless: :$start, :$end }
+    multi method new(Any :$start, Any :$end) { samewith $start, $end }
     method GENERATE {
-        RakuAST::Regex::CharClassEnumerationElement::Character.new(
-            Range.new(:from($!start.ord),:to($!end.ord))
+        RakuAST::Regex::CharClassEnumerationElement::Range.new(
+            :from($!start),:to($!end)
         )
     }
 }
@@ -418,7 +415,7 @@ class CharacterClassEscape is export {
     has $.type;
     has $.negated;
     method new($type) {
-        self.bless: :type($type.lc), :negated($type eq $type.lc)
+        self.bless: :type($type.lc), :negated($type eq $type.uc)
     }
     method GENERATE {
         # dDsSwW
@@ -459,4 +456,151 @@ class CharacterClassEscape is export {
             }
         }
     }
+}
+
+constant %unicode-names =
+    ASCII => 'ASCII',
+    ASCII_Hex_Digit  => 'ASCII_Hex_Digit', AHex => 'ASCII_Hex_Digit',
+    Alphabetic  => 	'Alphabetic',Alpha =>  'Alphabetic',
+    Any  => 	'Any',
+    Assigned 	 => 'Assigned',
+    Bidi_Control  => 	'Bidi_Control', Bidi_C  => 'Bidi_Control',
+    Bidi_Mirrored  => 	'Bidi_Mirrored', Bidi_M  => 'Bidi_Mirrored',
+    Case_Ignorable  => 	'Case_Ignorable',   CI  => 'Case_Ignorable',
+    Cased  => 	'Cased',
+    Changes_When_Casefolded  => 	'Changes_When_Casefolded', CWCF  => 'Changes_When_Casefolded',
+    Changes_When_Casemapped 	 => 'Changes_When_Casemapped', CWCM  => 'Changes_When_Casemapped',
+    Changes_When_Lowercased  => 	'Changes_When_Lowercased', CWL  => 'Changes_When_Lowercased',
+    Changes_When_NFKC_Casefolded  => 	'Changes_When_NFKC_Casefolded', CWKCF =>  'Changes_When_NFKC_Casefolded',
+    Changes_When_Titlecased  => 	'Changes_When_Titlecased', CWT => 	'Changes_When_Titlecased',
+    Changes_When_Uppercased => 	'Changes_When_Uppercased', CWU => 'Changes_When_Uppercased',
+    Dash => 	'Dash',
+    Default_Ignorable_Code_Point => 	'Default_Ignorable_Code_Point', DI => 'Default_Ignorable_Code_Point',
+    Deprecated => 	'Deprecated', Dep => 'Deprecated',
+    Diacritic => 	'Diacritic', Dia => 'Diacritic',
+    Emoji => 	'Emoji',
+    Emoji_Component => 	'Emoji_Component', EComp => 'Emoji_Component',
+    Emoji_Modifier => 	'Emoji_Modifier',EMod => 'Emoji_Modifier',
+    Emoji_Modifier_Base => 	'Emoji_Modifier_Base', EBase => 'Emoji_Modifier_Base',
+    Emoji_Presentation => 	'Emoji_Presentation', EPres => 'Emoji_Presentation',
+    Extended_Pictographic => 	'Extended_Pictographic', ExtPict => 'Extended_Pictographic',
+    Extender => 	'Extender', Ext => 'Extender',
+    Grapheme_Base => 	'Grapheme_Base', Gr_Base => 'Grapheme_Base',
+    Grapheme_Extend => 	'Grapheme_Extend', Gr_Ext => 'Grapheme_Extend',
+    Hex_Digit => 	'Hex_Digit', Hex => 'Hex_Digit',
+    IDS_Binary_Operator => 	'IDS_Binary_Operator', IDSB => 'IDS_Binary_Operator',
+    IDS_Trinary_Operator => 	'IDS_Trinary_Operator', IDST => 'IDS_Trinary_Operator',
+    ID_Continue => 	'ID_Continue', IDC => 'ID_Continue',
+    ID_Start => 	'ID_Start', IDS => 'ID_Start',
+    Ideographic 	=> 'Ideographic', Ideo => 'Ideographic',
+    Join_Control => 	'Join_Control', Join_C=>  'Join_Control',
+    Logical_Order_Exception => 	'Logical_Order_Exception', LOE => 'Logical_Order_Exception',
+    Lowercase => 	'Lowercase', Lower => 'Lowercase',
+    Math  =>	'Math',
+    Noncharacter_Code_Point  =>	'Noncharacter_Code_Point', NChar  =>'Noncharacter_Code_Point',
+    Pattern_Syntax  =>	'Pattern_Syntax', Pat_Syn  =>'Pattern_Syntax',
+    Pattern_White_Space  =>	'Pattern_White_Space', Pat_WS  =>'Pattern_White_Space',
+    Quotation_Mark  =>	'Quotation_Mark', QMark  =>'Quotation_Mark',
+    Radical  =>	'Radical',
+    Regional_Indicator  =>	'Regional_Indicator', RI  =>'Regional_Indicator',
+    Sentence_Terminal  =>	'Sentence_Terminal', STerm  =>'Sentence_Terminal',
+    Soft_Dotted 	 =>'Soft_Dotted', SD  =>'Soft_Dotted',
+    Terminal_Punctuation  =>	'Terminal_Punctuation', Term  =>'Terminal_Punctuation',
+    Unified_Ideograph  =>	'Unified_Ideograph', UIdeo  =>'Unified_Ideograph',
+    Uppercase  =>	'Uppercase', Upper => 'Uppercase',
+    Variation_Selector  =>	'Variation_Selector', VS  =>'Variation_Selector',
+    White_Space  =>	'White_Space', space  =>'White_Space',
+    XID_Continue  =>	'XID_Continue', XIDC => 'XID_Continue',
+    XID_Start  =>	'XID_Start', XIDS  =>'XID_Start';
+
+class CharacterClassUnicodeProperty is export {
+    has $.property;
+    has $.inverted;
+    has $.predicate;
+    method new(:$property, :$inverted, :$predicate) {
+        self.bless: :$property, :$inverted, :$predicate
+    }
+    method GENERATE {
+        my $negated = $*NEGATED;
+        if $!predicate {
+            RakuAST::Regex::CharClassElement::Property.new(
+                :$!property,
+                :predicate(
+                    RakuAST::Circumfix::Parentheses.new(
+                        RakuAST::SemiList.new(
+                            RakuAST::Statement::Expression.new(
+                                expression => RakuAST::QuotedString.new(
+                                    segments   => (RakuAST::StrLiteral.new($!predicate),)
+                                )
+                            )
+                        )
+                    )
+                ),
+                :$!inverted,
+                :$negated
+            )
+
+        } else {
+            RakuAST::Regex::CharClassElement::Property.new(
+                :$!property,
+                :$!inverted,
+                :$negated
+            )
+        }
+    }
+}
+
+
+# Unlike the character class, this one can only be inverted
+class UnicodeProperty is export {
+    has $.property;
+    has $.inverted;
+    has $.predicate;
+    method new(:$property, :$predicate, :$inverted) {
+        self.bless: :$property, :$predicate, :$inverted
+    }
+    method GENERATE {
+        if $!predicate {
+            RakuAST::Regex::Assertion::CharClass.new(
+                RakuAST::Regex::CharClassElement::Property.new(
+                    :$!property,
+                    :predicate(
+                        RakuAST::Circumfix::Parentheses.new(
+                            RakuAST::SemiList.new(
+                                RakuAST::Statement::Expression.new(
+                                    expression => RakuAST::QuotedString.new(
+                                        segments   => (RakuAST::StrLiteral.new($!predicate),)
+                                    )
+                                )
+                            )
+                        )
+                    ),
+                    :$!inverted,
+                ),
+            )
+        } else {
+            RakuAST::Regex::Assertion::CharClass.new(
+                RakuAST::Regex::CharClassElement::Property.new(
+                    :$!property,
+                    :$!inverted,
+                )
+            )
+        }
+    }
+}
+
+class AtomicCharacterClassEscape is export {
+    has $.char-class-escape;
+    method new($type) {
+        self.bless: char-class-escape => (CharacterClassEscape.new: $type)
+    }
+    method GENERATE {
+        RakuAST::Regex::Assertion::CharClass.new(
+            RakuAST::Regex::CharClassElement::Enumeration.new(
+                elements => $!char-class-escape.GENERATE.Array,
+                negated => $!char-class-escape.negated
+            )
+        )
+    }
+
 }
