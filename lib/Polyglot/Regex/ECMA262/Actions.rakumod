@@ -39,31 +39,45 @@ method ECMA262-Regex-TOP (Mu $/) {
             postfix => RakuAST::Call::Method.new(
                 name => RakuAST::Name.from-identifier('register-names'),
                 |((args => RakuAST::ArgList.new(
-                    %*ECMA262-GROUP-NAMES.map:
-                        {RakuAST::ColonPair::Number.new(key => .key, value => .value)}
+                    |(%*ECMA262-GROUP-NAMES.map:
+                        {RakuAST::ColonPair::Number.new(
+                            key => .key,
+                            value => RakuAST::IntLiteral.new(.value))})
                 )) if %*ECMA262-GROUP-NAMES)
             )
         )
     );
 
+    # Check for any postoptions.  Case insensitive should be put in as an adverb,
+    # because the object will be compiled at a higher level when we can't add the
+    # modifier globally.
+    my $case-insensitive := Empty;
+    with lk($/,'ECMA262-Regex-postoptions').?made {
+        $case-insensitive := lk($_,'i') ?? RakuAST::Regex::InternalModifier::IgnoreCase.new !! Empty;
+        $*ECMA262-MULTILINE-MODE = lk($_,'m');
+        $*ECMA262-DOT-MATCHES-NEWLINE = lk($_,'s');
+    }
+    # Generate function is aware of the above dynamics
     my @main-stmts = lk($/,'ECMA262-Regex-disjunction').made.map(*.GENERATE);
-    # options ($*ECMA262-CASE-INSENSITIVE ?? ':i' !! '')
     make RakuAST::Regex::Sequence.new(
         rx-block-blockoid-stmtlist(
             $use-stmt,
             $does-stmt,
             $reg-name-stmt,
         ),
+        |$case-insensitive,
         |@main-stmts
-    )
+    );
 }
 
 method ECMA262-Regex-postoptions (Mu $/) {
+    my %options = :!i, :!m, :!s;
     given $/.Str {
-        when 'm' { $*ECMA262-DOT-MATCHES-NEWLINE = True }
-        when 's' { $*ECMA262-MULTILINE-MODE      = True }
-        when 'i' { $*ECMA262-CASE-INSENSITIVE    = True }
+        when /m/ { %options.ASSIGN-KEY('m',True) }
+        when /s/ { %options.ASSIGN-KEY('s',True) }
+        when /i/ { %options.ASSIGN-KEY('i',True) }
     }
+    make %options;
     $*ECMA262-HAD-POSTOPTIONS = True;
 }
 
@@ -87,15 +101,16 @@ method ECMA262-Regex-term (Mu $/) {
 
 method ECMA262-Regex-quantifier (Mu $/) {
     my $frugal = lk($/,'frugal').Str eq '?';
-    my $prefix = lk($/,'ECMA262-Regex-quantifier-prefix');
+    my $prefix = lk($/,'ECMA262-Regex-quantifier-prefix').Str;
     my $min;
     my $max;
-    say "Frugal is $frugal";
+
     if    $prefix eq '?' { $min = 0; $max = 1   }
     elsif $prefix eq '+' { $min = 1; $max = Inf }
     elsif $prefix eq '*' { $min = 0; $max = Inf }
     else {
-        with lk(lk($/,'ECMA262-Regex-quantifier-prefix'),'max') {
+        $prefix = lk($/,'ECMA262-Regex-quantifier-prefix');
+        with lk($prefix,'max') {
             $min = lk($prefix,'min').Str.Int;
             $max = lk($prefix,'max').Str.Int;
         } orwith lk($prefix,'range') {
@@ -113,9 +128,12 @@ method ECMA262-Regex-atom:literal          (Mu $/) { make Literal.new($/.Str)   
 method ECMA262-Regex-atom:any              (Mu $/) { make Wildcard                                    }
 method ECMA262-Regex-atom:escape           (Mu $/) { make lk($/,'ECMA262-Regex-atom-escape').made     }
 method ECMA262-Regex-atom:char-class       (Mu $/) { make lk($/,'ECMA262-Regex-character-class').made }
-method ECMA262-Regex-atom:noncapture-group (Mu $/) { make Group.new: lk($/,'ECMA262-Regex-disjunction').made }
+method ECMA262-Regex-atom:noncapture-group (Mu $/) { make Group.new: lk($/,'ECMA262-Regex-disjunction').made; }
 method ECMA262-Regex-atom:capture-group    (Mu $/) {
-    make CaptureGroup.new: lk($/,'ECMA262-Regex-disjunction').made;
+    make CaptureGroup.new:
+        lk($/,'ECMA262-Regex-disjunction').made,
+        :pos($*ECMA262-GROUP-COUNT),
+        :name(lk($/,'ECMA262-Regex-group-specifier').?made) ;
     # when there's a named one, register as this will be put in a header block.
     # This could (should?) maybe go in the grammar
     %*ECMA262-GROUP-NAMES{.made} = $*ECMA262-GROUP-COUNT with lk($/,'ECMA262-Regex-group-specifier');
@@ -160,7 +178,7 @@ method ECMA262-Regex-atom-escape:named (Mu $/) {
     make BackreferenceNamed.new: lk($/,'ECMA262-Regex-group-name').made;
 }
 method ECMA262-Regex-atom-escape:char-class-escape (Mu $/) {
-    make lk(%character-class-escape,$/.Str);
+    make AtomicCharacterClassEscape.new: $/.Str;
 }
 method ECMA262-Regex-atom-escape:char-escape (Mu $/) {
     make lk($/,'ECMA262-Regex-character-escape').made
@@ -182,32 +200,31 @@ method ECMA262-Regex-character-escape-in-char-class (Mu $/) {
     make .made with lk($/, 'ECMA262-Regex-unicode-property-in-char-class');
 }
 
-my %control-escape is Map =
-    'f', RakuAST::Regex::Literal.new("\xC"), # post space to avoid hex clash
-    'n', RakuAST::Regex::Literal.new("\xA"),
-    'r', RakuAST::Regex::Literal.new("\xD"),
-    't', RakuAST::Regex::Literal.new("\x9"),
-    'v', RakuAST::Regex::Literal.new("\xB")
-;
-method ECMA262-Regex-control-escape          (Mu $/) { make %control-escape.AT-KEY($/.Str)                         }
-method ECMA262-Regex-control-letter          (Mu $/) { make RakuAST::Regex::Literal.new: ($/.lc.ord - 96).chr      }
-method ECMA262-Regex-hex-escape-sequence     (Mu $/) { make RakuAST::Regex::Literal.new: $/.Str.parse-base(16).chr }
-method ECMA262-Regex-unicode-escape-sequence (Mu $/) { make RakuAST::Regex::Literal.new: $/.Str.parse-base(16).chr }
-method ECMA262-Regex-identity-escape         (Mu $/) { make RakuAST::Regex::Literal.new: $/.Str                    }
+my %control-escape is Map = 'f' => "\xC", 'n' => "\xA", 'r' => "\xD", 't' => "\x9", 'v' => "\xB";
+method ECMA262-Regex-control-escape          (Mu $/) { make Literal.new: %control-escape.AT-KEY($/.Str) }
+method ECMA262-Regex-control-letter          (Mu $/) { make Literal.new: ($/.lc.ord - 96).chr      }
+method ECMA262-Regex-hex-escape-sequence     (Mu $/) { make Literal.new: $/.Str.parse-base(16).chr }
+method ECMA262-Regex-unicode-escape-sequence (Mu $/) { make Literal.new: $/.Str.parse-base(16).chr }
+method ECMA262-Regex-identity-escape         (Mu $/) { make Literal.new: $/.Str                    }
 method ECMA262-Regex-unicode-property        (Mu $/) {
-
-    say "did unicode property!";
-    say "---> ", lk($/,'ECMA262-Regex-unicode-property-value-expression').made;
-    make (lk($/,'type') eq 'p' ?? '<:' !! '<:!') ~  lk($/,'ECMA262-Regex-unicode-property-value-expression').made ~ '>'
+    my $unicode = lk($/,'ECMA262-Regex-unicode-property-value-expression').made;
+    make UnicodeProperty.new:
+        property => lk($unicode,'property'),
+        predicate => lk($unicode,'predicate'),
+        inverted => (lk($/,'type') eq 'P')
 }
 
-method ECMA262-Regex-control-escape-in-char-class          (Mu $/) { make %control-escape.AT-KEY($/.Str)          }
-method ECMA262-Regex-control-letter-in-char-class          (Mu $/) { make '\\x' ~ ($/.lc.ord - 96).base(16) ~ ' ' }
-method ECMA262-Regex-hex-escape-sequence-in-char-class     (Mu $/) { make '\\x' ~ $/.Str ~ ' '                    }
-method ECMA262-Regex-unicode-escape-sequence-in-char-class (Mu $/) { make '\\x' ~ $/.Str ~ ' '                    }
-method ECMA262-Regex-identity-escape-in-char-class         (Mu $/) { make '\\'  ~ $/.Str                          }
+method ECMA262-Regex-control-escape-in-char-class          (Mu $/) { make CharacterClassSingle.new(%control-escape.AT-KEY($/.Str)) }
+method ECMA262-Regex-control-letter-in-char-class          (Mu $/) { make CharacterClassSingle.new(($/.lc.ord - 96).chr) }
+method ECMA262-Regex-hex-escape-sequence-in-char-class     (Mu $/) { make CharacterClassSingle.new($/.Str.parse-base(16).chr) }
+method ECMA262-Regex-unicode-escape-sequence-in-char-class (Mu $/) { make CharacterClassSingle.new($/.Str.parse-base(16).chr) }
+method ECMA262-Regex-identity-escape-in-char-class         (Mu $/) { make CharacterClassSingle.new($/.Str) }
 method ECMA262-Regex-unicode-property-in-char-class        (Mu $/) {
-    make (lk($/,'type') eq 'p' ?? ':' !! ':!') ~  lk($/,'ECMA262-Regex-unicode-property-value-expression').made ~ ' '
+    my $unicode = lk($/,'ECMA262-Regex-unicode-property-value-expression').made;
+    make CharacterClassUnicodeProperty.new:
+        inverted => (lk($/,'type') eq 'P'),
+        property => lk($unicode,'property'),
+        predicate => lk($unicode,'predicate')
 }
 
 proto method ECMA262-Regex-assertion { * }
@@ -222,7 +239,7 @@ method ECMA262-Regex-assertion:pos-lookback  (Mu $/)    { make Lookback.new:  lk
 method ECMA262-Regex-assertion:neg-lookback  (Mu $/)    { make Lookback.new:  lk($/,'ECMA262-Regex-disjunction').made, :negated }
 
 method ECMA262-Regex-character-class (Mu $/) {
-    my $negated = so lk($/,'negated');
+    my $negated = so lk($/,'negated').Str;
     my $inner = lk($/,'ECMA262-Regex-class-ranges').made;
     make CharacterClass.new(
         lk($/,'ECMA262-Regex-class-ranges').made,
@@ -233,9 +250,10 @@ method ECMA262-Regex-character-class (Mu $/) {
 method ECMA262-Regex-class-ranges (Mu $/) {
     with lk($/,'ECMA262-Regex-non-empty-class-ranges') {
         make .made
-    }else {
-        make ''
+    }else{
+        make Empty
     }
+
 }
 
 my proto sub polarity(|) {*}
@@ -244,41 +262,49 @@ multi sub polarity(FLIP-POLARITY) { $*NEGATED-CHAR-CLASS ?? '+' !! '-' }
 
 # Adding brackets is potentially overkill, but this lets us do things in a single pass
 method ECMA262-Regex-non-empty-class-ranges:range (Mu $/) {
-    make polarity() ,~ '[' ,~ lk($/,'ECMA262-Regex-class-atom').head.made ,~ '..' ,~ lk($/,'ECMA262-Regex-class-atom').tail.made ,~ ']' ,~ (.made with lk($/,'ECMA262-Regex-class-ranges')); # <-- the subsequent ones
+    my $made = CharacterClassRange.new(
+        start => lk($/,'ECMA262-Regex-class-atom').head.made,
+        end   => lk($/,'ECMA262-Regex-class-atom').tail.made
+    );
+    my @rest = lk($/,'ECMA262-Regex-class-ranges').?made // Empty;
+    make ($made, |@rest)
 }
 method ECMA262-Regex-non-empty-class-ranges:no-dash (Mu $/) {
     my $made = lk($/,'ECMA262-Regex-class-atom-no-dash').made;
-    make $made.head.starts-with(':') # is it a unicode class?
-        ?? polarity($made) ~       $made       ~ (lk($/,'ECMA262-Regex-non-empty-class-ranges-no-dash').?made // '')
-        !! polarity($made) ~ '[' ~ $made ~ ']' ~ (lk($/,'ECMA262-Regex-non-empty-class-ranges-no-dash').?made // '')
+    my @rest = lk($/,'ECMA262-Regex-non-empty-class-ranges-no-dash').?made // Empty;
+    make ($made, |@rest)
 }
 method ECMA262-Regex-non-empty-class-ranges:dashable (Mu $/) {
     my $made = lk($/,'ECMA262-Regex-class-atom').made;
-    make $made.head.starts-with(':') # is it a unicode class?
-        ?? polarity($made) ,~        $made
-        !! polarity($made) ,~ '[' ,~ $made ,~ ']'
+    my @rest = lk($/,'ECMA262-Regex-non-empty-class-ranges-no-dash').?made // Empty;
+    make ($made, |@rest)
+
 }
 
 # Basically the same
 method ECMA262-Regex-non-empty-class-ranges-no-dash:range (Mu $/) {
-        make polarity() ,~ '[' ,~ lk($/,'ECMA262-Regex-class-atom-no-dash').made ,~ '..' ,~ lk($/,'ECMA262-Regex-class-atom').made ,~ ']' ,~ (.made with lk($/,'ECMA262-Regex-class-ranges')); # <-- the subsequent ones
+    my $made = CharacterClassRange.new(
+        start => lk($/,'ECMA262-Regex-class-atom-no-dash').made,
+        end => lk($/,'ECMA262-Regex-class-atom').made
+    );
+    my @rest = lk($/,'ECMA262-Regex-class-ranges').?made // Empty;
+    make ($made, |@rest)
 }
 method ECMA262-Regex-non-empty-class-ranges-no-dash:no-dash (Mu $/) {
-    my $made = lk($/,'ECMA262-Regex-class-atom-no-dash').made;
-    make $made.head.starts-with(':') # is it a unicode class?
-        ?? polarity($made) ,~       $made         ,~ (lk($/,'ECMA262-Regex-non-empty-class-ranges-no-dash').?made // '')# <-- the subsequent ones
-        !! polarity($made) ,~ '[' ,~ $made ,~ ']' ,~ (lk($/,'ECMA262-Regex-non-empty-class-ranges-no-dash').?made // '')# <-- the subsequent ones
+    my $char  = lk($/,'ECMA262-Regex-class-atom-no-dash').made;
+    my @group = lk($/,'ECMA262-Regex-non-empty-class-ranges-no-dash').?made // Empty;
+    make ($char, |@group);
 }
 method ECMA262-Regex-non-empty-class-ranges-no-dash:dashable (Mu $/) {
-    my $made = lk($/,'ECMA262-Regex-class-atom').made;
-    make $made.head.starts-with(':') # is it a unicode class?
-        ?? polarity($made) ,~       $made
-        !! polarity($made) ,~ '[' ,~ $made ,~ ']'
+    make lk($/,'ECMA262-Regex-class-atom').made;
 }
 
 method ECMA262-Regex-class-atom(Mu $/) {
-    if   $/.Str eq '-' { make '\-'                                           }
-    else               { make lk($/,'ECMA262-Regex-class-atom-no-dash').made }
+    with lk($/,'dash') {
+        make CharacterClassSingle.new('-');
+    } else {
+        make lk($/,'ECMA262-Regex-class-atom-no-dash').made
+    }
 }
 
 method ECMA262-Regex-class-atom-no-dash (Mu $/) {
@@ -287,12 +313,7 @@ method ECMA262-Regex-class-atom-no-dash (Mu $/) {
         make lk($/,'ECMA262-Regex-class-escape').made
     }
     else { # normal character
-        my $prop = $char.uniprop;
-        if $prop.starts-with('L') || $prop eq 'Nd' || $char eq '_' {
-            make $char;
-        } else {
-            make '\\' ~ $char
-        }
+        make CharacterClassSingle.new($char);
     }
 }
 
@@ -300,7 +321,7 @@ method ECMA262-Regex-class-escape:backreference (Mu $/) {
     make '<{ $¢[' ,~ $/.Str ,~ '] }>'
 }
 method ECMA262-Regex-class-escape:backspace (Mu $/) {
-    make '\\b'
+    make "\b"
 }
 
 # This method is perhaps confusing, and could probably be done more elegantly down the road.
@@ -320,8 +341,11 @@ method ECMA262-Regex-atom:external-regex (Mu $/) {
 
 
 method ECMA262-Regex-unicode-property-value-expression:value (Mu $/) {
-    make $/.Str
+    make %(property => $/.Str)
 }
 method ECMA262-Regex-unicode-property-value-expression:key-value (Mu $/) {
-    make lk($/,'ECMA262-Regex-unicode-property-name').Str ~ '<' ~ lk($/,'ECMA262-Regex-unicode-property-value').Str ~ '>'
+    make %(
+        property => lk($/,'ECMA262-Regex-unicode-property-name').Str,
+        predicate => lk($/,'ECMA262-Regex-unicode-property-value').Str
+    )
 }

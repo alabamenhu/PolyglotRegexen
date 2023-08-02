@@ -10,7 +10,6 @@ unit role ECMA262-Regex;
 #| other than $ (for instance, /) and can optionally allow trailing whitespace
 #| up to that terminal character ($*ECMA262-ENDER and $*ECMA262-SPACE-FLANKED)
 token ECMA262-Regex-TOP {
-
     # These regex options need to be set this way in case another regex intends to
     # incorporate the TOP token and wants to pass it (as the prime example, one
     # need only look at the Grammar-Mixin for Polyglot::Regex::ECMA262.  Normally,
@@ -29,7 +28,7 @@ token ECMA262-Regex-TOP {
         <.ECMA262-Regex-allow-postoptions>
         <.ECMA262-Regex-check-terminator>
         .
-        <ECMA262-Regex-postoptions>+
+        <ECMA262-Regex-postoptions>
     ]?
     <?before
         [<ECMA262-Regex-space-flanking> \s*! ]?
@@ -43,14 +42,14 @@ token ECMA262-Regex-TOP {
 
 token ECMA262-Regex-postoptions {
     [
-    | s # 'Dot for newline'
-    | m # 'Multiline'
-    | g # 'Global'
-    | d # 'Substring match indices'
-    | i # 'Case insensitive'
-    | u # 'Unicode'
-    | y # 'Sticky'
-    ]
+    | s                                                                        # 'Dot for newline'
+    | m                                                                        # 'Multiline'
+    | g <.panic("Modifier '{$/.Str}' not yet supported or not possible here")> # 'Global'
+    | d <.panic("Modifier '{$/.Str}' not yet supported or not possible here")> # 'Substring match indices'
+    | i                                                                        # 'Case insensitive'
+    | u <.panic("Modifier '{$/.Str}' not yet supported or not possible here")> # 'Unicode'
+    | y <.panic("Modifier '{$/.Str}' not yet supported or not possible here")> # 'Sticky'
+    ]+
     { $*ECMA262-HAD-POSTOPTIONS = True }
 }
 
@@ -160,6 +159,20 @@ token ECMA262-Regex-unicode-escape-sequence { 'u' <( <[0..9A..Fa..f]>**4 )> }
 token ECMA262-Regex-identity-escape         { <-ident-[\c[ZWJ]\c[ZWNJ]]>    }
 token ECMA262-Regex-unicode-property        { $<type>=<[pP]> \{ <ECMA262-Regex-unicode-property-value-expression> \} }
 
+
+#| Simple latin decimal digits in sequence. (Only used for backreferences in ECMA262)
+token ECMA262-Regex-decimal-digits { <[0..9]>+ }
+
+# per ECMA, [a-b] works, but [\w-x] does NOT
+# we specify valid parts for char class by passing a variable
+token ECMA262-Regex-character-class-escape { <[dDsSwW]> }
+token ECMA262-Regex-character-class {
+    '['
+        $<negated>='^'?
+        <ECMA262-Regex-class-ranges>
+    ']'
+}
+
 # These are the same escapes, except used INSIDE of (enumerated) character classes
 token ECMA262-Regex-character-escape-in-char-class {
     |     <ECMA262-Regex-control-escape-in-char-class>
@@ -176,38 +189,28 @@ token ECMA262-Regex-unicode-escape-sequence-in-char-class { 'u' <( <[0..9A..Fa..
 token ECMA262-Regex-identity-escape-in-char-class         { <-ident-[\c[ZWJ]\c[ZWNJ]]>    }
 token ECMA262-Regex-unicode-property-in-char-class        { $<type>=<[pP]> \{ <ECMA262-Regex-unicode-property-value-expression> \} }
 
-#| Simple latin decimal digits in sequence. (Only used for backreferences in ECMA262)
-token ECMA262-Regex-decimal-digits { <[0..9]>+ }
-
-# per ECMA, [a-b] works, but [\w-x] does NOT
-# we specify valid parts for char class by passing a variable
-token ECMA262-Regex-character-class-escape { <[dDsSwW]> }
-token ECMA262-Regex-character-class {
-    '['
-        $<negated>='^'?
-        <ECMA262-Regex-class-ranges>
-    ']'
-}
 token ECMA262-Regex-class-ranges {
     <ECMA262-Regex-non-empty-class-ranges>?
 }
-proto token ECMA262-Regex-non-empty-class-ranges { * }
+
+proto
+token ECMA262-Regex-non-empty-class-ranges { * }
 token ECMA262-Regex-non-empty-class-ranges:range    { :my $*ALLOW-CHAR-CLASS := False; <ECMA262-Regex-class-atom> '-' <ECMA262-Regex-class-atom> <ECMA262-Regex-class-ranges> }
 token ECMA262-Regex-non-empty-class-ranges:no-dash  { :my $*ALLOW-CHAR-CLASS := True;  <ECMA262-Regex-class-atom-no-dash> <ECMA262-Regex-non-empty-class-ranges-no-dash>? }
-token ECMA262-Regex-non-empty-class-ranges:dashable { :my $*ALLOW-CHAR-CLASS := True;  <ECMA262-Regex-class-atom> }
+token ECMA262-Regex-non-empty-class-ranges:dashable { :my $*ALLOW-CHAR-CLASS := True;  <ECMA262-Regex-class-atom> <ECMA262-Regex-non-empty-class-ranges-no-dash>? } #javascript allows this, the standard disagrees
 
-proto token ECMA262-Regex-non-empty-class-ranges-no-dash { * }
-
+proto
+token ECMA262-Regex-non-empty-class-ranges-no-dash { * }
 token ECMA262-Regex-non-empty-class-ranges-no-dash:range    { :my $*ALLOW-CHAR-CLASS := False; <ECMA262-Regex-class-atom-no-dash> '-' <ECMA262-Regex-class-atom> <ECMA262-Regex-class-ranges> }
 token ECMA262-Regex-non-empty-class-ranges-no-dash:no-dash  { :my $*ALLOW-CHAR-CLASS := True;  <ECMA262-Regex-class-atom-no-dash> <ECMA262-Regex-non-empty-class-ranges-no-dash> }
 token ECMA262-Regex-non-empty-class-ranges-no-dash:dashable { :my $*ALLOW-CHAR-CLASS := True;  <ECMA262-Regex-class-atom> }
 
 token ECMA262-Regex-class-atom {
-    | '-'
+    | $<dash>='-'
     | <ECMA262-Regex-class-atom-no-dash>
 }
 token ECMA262-Regex-class-atom-no-dash {
-    | <-[\\\]-]>
+    | $<single>=<-[\\\]-]>
     | \\ <ECMA262-Regex-class-escape>
 }
 
@@ -232,11 +235,12 @@ token ECMA262-Regex-identifier-start-char {
 }
 token ECMA262-Regex-identifier-part-char {
     | <:ID_Continue+[$\x200c\x200d]>
+    | <:ID_Continue+[$\x200c\x200d]>
     | '\\' <ECMA262-Regex-unicode-escape-sequence>
 }
 
 proto token ECMA262-Regex-unicode-property-value-expression { * }
-token ECMA262-Regex-unicode-property-value-expression:value     { {say "KEY"}<ECMA262-Regex-unicode-property-value> <!before '='> }
+token ECMA262-Regex-unicode-property-value-expression:value     { <ECMA262-Regex-unicode-property-value> <!before '='> }
 token ECMA262-Regex-unicode-property-value-expression:key-value { <ECMA262-Regex-unicode-property-name> '=' <ECMA262-Regex-unicode-property-value> }
 token ECMA262-Regex-unicode-property-name  { <[_a..zA..Z]>+     }
 token ECMA262-Regex-unicode-property-value { <[_a..zA..Z0..9]>+ }
