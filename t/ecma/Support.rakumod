@@ -21,20 +21,20 @@ sub ecma2raku(Str $ecma) is export {
     # The actual result is /{…}regex/, where the block applies a role.
     # That's a lot of extra crud to deal with, so take out the prefix and slashes
     my $s = G.parse($ecma, :actions(A)).made;
-    #say $s;
+
     $s = (EVAL RakuAST::QuotedRegex.new(body => $s)).gist;
     $s ~~ /:r # ratchet, token style
-           ^\/ \h* \{ # prefix is currently rx/{
+           ^\/ \h* \{ # prefix is currently just /{
            .*?     # match frugally until
            \}      # the end of the code block }
            <(.*)>  # then capture everything else
     /;
-    '/' ~ $/.Str
+    '/' ~ $/.Str.subst(/\s+/,' ', :g)
 }
 
 sub ecma-match(Str $ecma, Str $text) is export {
     my $s = G.parse($ecma, :actions(A)).made;
     #say $s;
     $s = EVAL RakuAST::QuotedRegex.new(body => $s);
-    ~ ($text ~~ $s)
+    #~ ($text ~~ $s)
 }
