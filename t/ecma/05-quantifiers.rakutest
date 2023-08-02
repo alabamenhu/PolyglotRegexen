@@ -6,17 +6,15 @@ use Support;
 is ecma2raku('a?'), '/a?/', 'One or none';
 is ecma2raku('a+'), '/a+/', 'One or more';
 is ecma2raku('a*'), '/a*/', 'None or more';
-is ecma2raku('a{2}'), '/a** 2..2/', 'Exactly some number';
+is ecma2raku('a{2}'), '/a** 2/', 'Exactly some number';
 is ecma2raku('a{2,}'), '/a** 2..*/', 'Some number or more';
 is ecma2raku('a{2,5}'), '/a** 2..5/', 'Some number to another number';
-#is ecma2raku('a??'), '/a??/', 'Frugal one or none';
-#is ecma-match('a??','aaa'), 'a', 'Frugal one or none';
-#is ecma2raku('a+?'), '/a+?/', 'Frugal one or more';
-#is ecma-match('a+?','aaa'), 'a', 'Frugal one or more';
-#is ecma2raku('a*?'), '/a*?/', 'Frugal none or more';
-#is ecma2raku('a{2}?'), '/a **? 2 /', 'Frugal exactly some number';
-#is ecma2raku('a{2,}?'), '/a **? 2..* /', 'Frugal some number or more';
-#is ecma2raku('a{2,5}?'), '/a **? 2..5 /', 'Frugal some number to another number';
+is ecma2raku('a??'), '/a??/', 'Frugal one or none';
+is ecma2raku('a+?'), '/a+?/', 'Frugal one or more';
+is ecma2raku('a*?'), '/a*?/', 'Frugal none or more';
+is ecma2raku('a{2}?'), '/a**? 2/', 'Frugal exactly some number';
+is ecma2raku('a{2,}?'), '/a**? 2..*/', 'Frugal some number or more';
+is ecma2raku('a{2,5}?'), '/a**? 2..5/', 'Frugal some number to another number';
 #is ecma2raku('(a)+'), '/(a)[a]*/', 'One or more quantified positional capture';
 
 done-testing
