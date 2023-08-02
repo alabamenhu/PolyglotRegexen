@@ -8,5 +8,9 @@ is ecma2raku('aa'), '/aa/', 'Double literal';
 is ecma2raku('1'), '/1/', 'Single literal, digit';
 is ecma2raku(','), '/","/', 'ECMA literal, Raku escaped';
 is ecma2raku('a,1'), '/"a,1"/', 'ECMA literal sequence, Raku sequence with embedded escaped';
+is ecma2raku('\\x61'), '/a/', 'Hex escape sequence, Raku literal';
+is ecma2raku('\\u0061'), '/a/', 'Unicode escape sequence, Raku literal';
+is ecma2raku('\\x2e'), '/"."/', 'Hex escape sequence, Raku escaped';
+is ecma2raku('\\u002e'), '/"."/', 'Unicode escape sequence, Raku escaped';
 
 done-testing;
