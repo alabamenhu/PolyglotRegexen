@@ -1,7 +1,7 @@
 {
   "name": "Polyglot::Regexen",
   "description": "A module enabling different flavors of regex to be used directly in Raku code",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "perl": "6.*",
   "authors": [
     "Matthew Stuckwisch"
@@ -13,15 +13,15 @@
     "Test"
   ],
   "provides": {
+    "Polyglot::Regex::ECMA262::Actions": "lib/Polyglot/Regex/ECMA262/Actions.rakumod",
+    "Polyglot::Regex::ECMA262::Actions-Mixin": "lib/Polyglot/Regex/ECMA262/Actions-Mixin.rakumod",
     "Polyglot::Regex::ECMA262::Classes": "lib/Polyglot/Regex/ECMA262/Classes.rakumod",
-    "Polyglot::Regex::ECMA::Actions": "lib/Polyglot/Regex/ECMA262/Actions.rakumod",
-    "Polyglot::Regex::ECMA::Actions-Mixin": "lib/Polyglot/Regex/ECMA262/Actions-Mixin.rakumod",
-    "Polyglot::Regex::ECMA::Grammar": "lib/Polyglot/Regex/ECMA262/Grammar.rakumod",
-    "Polyglot::Regex::ECMA::Grammar-Mixin": "lib/Polyglot/Regex/ECMA262/Grammar-Mixin.rakumod",
-    "Polyglot::Regex::ECMA::Role": "lib/Polyglot/Regex/ECMA262/Role.rakumod",
+    "Polyglot::Regex::ECMA262::Grammar": "lib/Polyglot/Regex/ECMA262/Grammar.rakumod",
+    "Polyglot::Regex::ECMA262::Grammar-Mixin": "lib/Polyglot/Regex/ECMA262/Grammar-Mixin.rakumod",
+    "Polyglot::Regex::ECMA262::Role": "lib/Polyglot/Regex/ECMA262/Role.rakumod",
     "Polyglot::Regexen": "lib/Polyglot/Regexen.rakumod"
   },
   "resources": [],
   "license": "Artistic-2.0",
-  "source-url": "Write me!"
+  "source-url": "git://github.com/alabamenhu/PolyglotRegexen.git"
 }
