@@ -30,11 +30,12 @@ method register-position($match is raw, Int() $position) {
 }
 
 #| Registers the names to be used in a match
-method register-names(*@items) { %!names := Map.new(@items) }
+method register-names(*%items) { %!names := Map.new: %items }
 
 method list { @!matches.List }
 method hash { Map.new(%!names.map: {.key => @!matches[.value]} ) }
 
+multi method AT-POS(Int \pos, :$ECMA262-INTERNAL!) { self.Match::AT-POS(pos) }
 multi method AT-POS(Int \pos) {
     @!matches[pos]
 }
@@ -53,6 +54,7 @@ method gist {
 
     @matches = @matches.sort: { .<from>, -.<to> };
     my %reverse = %!names.invert;
+
     my $gist = '｢' ~ self.Str ~ '｣ ᴇᴄᴍᴀ';
     $gist ~= "\n" ~ ' ' ~ (.key+1) ~ ('<' ~ $_ ~ '>' with %reverse{.key+1}) ~ ' => ｢' ~ .value.?Str ~ '｣'
         for @!matches[1..*].pairs;
